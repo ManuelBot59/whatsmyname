@@ -1,128 +1,253 @@
-# --- INICIO DEL ARCHIVO main.py ---
-from gevent import monkey
-monkey.patch_all()
-
-# AHORA sí importamos el resto
-from flask import Flask, render_template, request
-from flask_socketio import SocketIO, emit
-import requests
-import os
-from flask import Flask, render_template, request
-from flask_socketio import SocketIO, emit
-from socid_extractor import extract
+import streamlit as st
 import requests
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from threading import Lock
-import signal
-import sys
 
-app = Flask(__name__)
-app.secret_key = 'Password'
-socketio = SocketIO(app)
-search_flags = {}
-lock = Lock()
+# --- 1. CONFIGURACIÓN DE PÁGINA (Título de Pestaña) ---
+st.set_page_config(
+    page_title="WhatsMyName Web | Herramienta SOCMINT | Manuel Travezaño",
+    page_icon="🔍",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
 
-def fetch_sites_data():
-    response = requests.get("https://raw.githubusercontent.com/WebBreacher/WhatsMyName/main/wmn-data.json")
-    data = response.json()
-    sites = data["sites"]
-    categories = data.get("categories", [])
-    return sites, categories
+# --- 2. ESTILOS CSS (Adaptados a tu Marca: Azul #1c3961 y Blanco/Gris) ---
+st.markdown("""
+<style>
+    /* Ocultar elementos nativos de Streamlit */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    header {visibility: hidden;}
 
-def extract_social_info(response_text, url):
+    /* Fondo general más limpio */
+    .stApp {
+        background-color: #f4f7f6;
+        color: #333;
+    }
+
+    /* Títulos Principales */
+    h1 {
+        background: linear-gradient(45deg, #1c3961, #0066a9);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        font-family: 'Helvetica', sans-serif;
+        font-weight: 800;
+        text-align: center;
+        padding-top: 1rem;
+    }
+    
+    /* Subtítulos */
+    h3 {
+        color: #1c3961;
+        text-align: center;
+        font-weight: 600;
+        margin-bottom: 2rem;
+    }
+
+    /* Tarjetas de Resultados */
+    .result-card {
+        background-color: #ffffff;
+        padding: 20px;
+        border-radius: 12px;
+        border-left: 5px solid #27ae60; /* Tu verde corporativo */
+        margin-bottom: 15px;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+        transition: transform 0.2s;
+    }
+    .result-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 15px rgba(0,0,0,0.1);
+    }
+    
+    /* Enlaces en las tarjetas */
+    .result-link {
+        color: #1c3961 !important;
+        text-decoration: none;
+        font-weight: bold;
+        font-size: 1.1em;
+        display: block;
+        margin-top: 5px;
+    }
+    .result-link:hover {
+        color: #27ae60 !important;
+        text-decoration: underline;
+    }
+
+    /* Badges de Categoría */
+    .category-badge {
+        background-color: #eef2f6;
+        color: #1c3961;
+        padding: 4px 10px;
+        border-radius: 20px;
+        font-size: 0.75em;
+        font-weight: bold;
+        float: right;
+        text-transform: uppercase;
+    }
+
+    /* Botón Principal (Estilo ManuelBot) */
+    .stButton > button {
+        background-color: #1c3961;
+        color: white;
+        border-radius: 8px;
+        border: none;
+        font-weight: bold;
+        padding: 0.5rem 1rem;
+        width: 100%;
+    }
+    .stButton > button:hover {
+        background-color: #0066a9;
+        color: white;
+        border: none;
+    }
+
+    /* Footer de Créditos */
+    .footer-credits {
+        text-align: center;
+        margin-top: 50px;
+        padding: 20px;
+        border-top: 1px solid #ddd;
+        font-size: 0.85em;
+        color: #666;
+    }
+    .footer-credits a {
+        color: #1c3961;
+        font-weight: bold;
+        text-decoration: none;
+    }
+</style>
+""", unsafe_allow_html=True)
+
+# --- LÓGICA DEL MOTOR (Requests puro para velocidad) ---
+WMN_DATA_URL = "https://raw.githubusercontent.com/WebBreacher/WhatsMyName/main/wmn-data.json"
+
+@st.cache_data
+def load_sites():
     try:
-        extracted_data = extract(response_text)
-        if extracted_data:
-            formatted_data = {}
-            for key, value in extracted_data.items():
-                formatted_key = " ".join(word.capitalize() for word in key.split("_"))
-                formatted_data[formatted_key] = value
-            return formatted_data
-        return None
+        response = requests.get(WMN_DATA_URL)
+        data = response.json()
+        return data['sites']
     except Exception as e:
-        return None
+        st.error(f"Error conectando con la base de datos: {e}")
+        return []
 
-def check_sites_concurrently(sites, username, sid):
-    total_sites = len(sites)
-    found_count = 0
-    with requests.Session() as session:
-        headers = {
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-            "Accept-Language": "en-US;q=0.9,en;q=0.8",
-            "Accept-Encoding": "gzip, deflate",
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/104.0.0.0 Safari/537.36",
-        }
-        with ThreadPoolExecutor(max_workers=20) as executor:
-            futures = {executor.submit(check_site, site, username, headers, session): site for site in sites}
-            for index, future in enumerate(as_completed(futures), start=1):
-                result = future.result()
-                socketio.emit('progress', {'processed': index, 'total': total_sites}, room=sid)
-                if result:
-                    site_name, uri_display, category, extracted_info = result
-                    found_count += 1
-                    data = {
-                        'site_name': site_name,
-                        'url': uri_display,
-                        'category': category,
-                        'username': username,
-                        'extracted_info': extracted_info
-                    }
-                    socketio.emit('new_result', data, room=sid)
-                socketio.emit('found_count', {'found': found_count}, room=sid)
-                if index == total_sites:
-                    socketio.emit('search_complete', {'total': total_sites, 'found': found_count}, room=sid)
-
-def check_site(site, username, headers, session):
-    uri_check = site["uri_check"].format(account=username)
-    uri_pretty = site.get("uri_pretty", uri_check).format(account=username)
-    uri_display = uri_pretty if "uri_pretty" in site else uri_check
+def check_site(site, username):
+    uri = site['uri_check'].format(account=username)
     try:
-        res = session.get(uri_check, headers=headers, timeout=10)
-        estring_pos = site["e_string"] in res.text
-        estring_neg = site["m_string"] in res.text
-        if res.status_code == site["e_code"] and estring_pos and not estring_neg:
-            category = site["cat"]
-            extracted_info = extract_social_info(res.text, uri_check)
-            return site["name"], uri_display, category, extracted_info
+        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'}
+        # Timeout corto para velocidad máxima
+        r = requests.get(uri, headers=headers, timeout=5)
+        
+        if r.status_code == site['e_code']:
+            if site.get('e_string') and site['e_string'] not in r.text:
+                return None
+            return {
+                "name": site['name'],
+                "uri": uri,
+                "category": site['cat']
+            }
     except:
-        pass
+        return None
     return None
 
-@app.route("/", methods=["GET", "POST"])
-def index():
-    sites, categories = fetch_sites_data()
-    return render_template("index.html", categories=categories)
+# --- 3. BARRA LATERAL (Simulando tu Menú Web) ---
+with st.sidebar:
+    # Tu Logo Oficial
+    st.image("https://manuelbot59.com/images/FirmaManuelBot59.png", use_column_width=True)
+    
+    st.markdown("### 📌 Navegación")
+    st.markdown("""
+    - [🏠 Inicio](https://manuelbot59.com/)
+    - [🎓 Cursos](https://manuelbot59.com/formacion/)
+    - [🛒 Tienda](https://manuelbot59.com/tienda/)
+    - [🕵️ OSINT](https://manuelbot59.com/osint/)
+    """)
+    
+    st.markdown("---")
+    st.markdown("### 📞 Contacto")
+    st.markdown("📧 **Email:** ManuelBot@proton.me")
+    st.markdown("✈️ **Telegram:** [ManuelBot59](https://t.me/ManuelBot59_Bot)")
+    
+    st.markdown("---")
+    st.info("Esta herramienta realiza una enumeración de usuarios en +500 sitios web públicos utilizando técnicas SOCMINT.")
 
-@socketio.on('start_search')
-def handle_search(data):
-    username = data.get('username')
-    selected_category = data.get('category')
-    sid = request.sid
-    with lock:
-        search_flags[sid] = True
-    sites, categories = fetch_sites_data()
-    filtered_sites = [site for site in sites if site["cat"] == selected_category] if selected_category else sites
-    check_sites_concurrently(filtered_sites, username, sid)
+# --- 4. INTERFAZ PRINCIPAL ---
 
-@socketio.on('request_categories')
-def send_categories():
-    sites, categories = fetch_sites_data()
-    socketio.emit('categories', {'categories': categories}, room=request.sid)
+# Títulos
+st.title("WhatsMyName Web")
+st.markdown("### Herramienta SOCMINT | Manuel Travezaño")
 
-@socketio.on('disconnect')
-def handle_disconnect():
-    sid = request.sid
-    with lock:
-        if sid in search_flags:
-            del search_flags[sid]
+# Carga de datos
+sites = load_sites()
+categories = sorted(list(set([s['cat'] for s in sites])))
 
-def signal_handler(sig, frame):
-    sys.exit(0)
+# Panel de Búsqueda
+with st.container():
+    col1, col2, col3 = st.columns([3, 1, 1])
+    with col1:
+        username = st.text_input("Usuario a investigar", placeholder="Ej: manuelbot59", label_visibility="collapsed")
+    with col2:
+        selected_category = st.selectbox("Categoría", ["Todas"] + categories, label_visibility="collapsed")
+    with col3:
+        start_btn = st.button("🔍 INVESTIGAR")
 
-signal.signal(signal.SIGINT, signal_handler)
+# Resultados
+if start_btn:
+    if not username:
+        st.warning("⚠️ Por favor ingresa un nombre de usuario.")
+    else:
+        # Filtro
+        target_sites = sites if selected_category == "Todas" else [s for s in sites if s['cat'] == selected_category]
+        
+        # Barra de progreso y status
+        st.divider()
+        st.markdown(f"**🔎 Analizando huella digital para:** `{username}` en {len(target_sites)} plataformas...")
+        
+        progress_bar = st.progress(0)
+        status_text = st.empty()
+        results_container = st.container()
+        
+        found_count = 0
+        processed = 0
+        
+        # Procesamiento Paralelo Rápido (30 hilos)
+        with ThreadPoolExecutor(max_workers=30) as executor:
+            future_to_site = {executor.submit(check_site, site, username): site for site in target_sites}
+            
+            for future in as_completed(future_to_site):
+                result = future.result()
+                processed += 1
+                
+                # Actualizar barra (cada 5 para no saturar UI)
+                if processed % 5 == 0 or processed == len(target_sites):
+                    progress_bar.progress(processed / len(target_sites))
+                    status_text.caption(f"Progreso: {processed}/{len(target_sites)} sitios verificados")
+                
+                if result:
+                    found_count += 1
+                    with results_container:
+                        st.markdown(f"""
+                        <div class="result-card">
+                            <span class="category-badge">{result['category']}</span>
+                            <div style="font-size: 0.9em; color: #666; margin-bottom: 5px;">Sitio detectado:</div>
+                            <div style="font-size: 1.2em; font-weight: bold; color: #333;">{result['name']}</div>
+                            <a href="{result['uri']}" target="_blank" class="result-link">
+                                🔗 Ver Perfil Detectado
+                            </a>
+                        </div>
+                        """, unsafe_allow_html=True)
 
-if __name__ == '__main__':
-    import os
-    # Detecta el puerto de la nube automáticamente
-    port = int(os.environ.get("PORT", 5000))
-    socketio.run(app, host='0.0.0.0', port=port)
+        progress_bar.progress(100)
+        status_text.empty()
+        
+        if found_count > 0:
+            st.success(f"✅ Análisis finalizado. Se encontraron {found_count} perfiles potenciales.")
+        else:
+            st.warning("❌ No se encontraron perfiles con este nombre de usuario.")
+
+# --- 5. FOOTER / CRÉDITOS ---
+st.markdown("""
+<div class="footer-credits">
+    This tool is powered by <a href="https://github.com/WebBreacher/WhatsMyName" target="_blank">WhatsMyName</a><br>
+    Implementación y optimización por <strong>Manuel Travezaño</strong>
+</div>
+""", unsafe_allow_html=True)
