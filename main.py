@@ -12,12 +12,12 @@ try:
 except ImportError:
     socid_extract = None
 
-# --- 1. CONFIGURACIÓN DE PÁGINA ---
+# --- 1. CONFIGURACIÓN DE PÁGINA (FORZAMOS SIDEBAR VISIBLE) ---
 st.set_page_config(
-    page_title="WhatsMyName Web | Herramienta SOCMINT | Manuel Travezaño",
+    page_title="WhatsMyName Web | Herramienta SOCMINT",
     page_icon="🕵️‍♂️",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="expanded"  # <--- CRÍTICO: Asegura que el sidebar se vea
 )
 
 # --- 2. GESTIÓN DE ESTADO ---
@@ -29,6 +29,7 @@ if "search_active" not in st.session_state:
 # --- 3. ESTILOS CSS ---
 st.markdown("""
 <style>
+    /* Ocultar elementos nativos innecesarios */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     header {visibility: hidden;}
@@ -48,7 +49,7 @@ st.markdown("""
         padding-top: 1rem;
     }
 
-    /* TARJETA HIPPIE STYLE MEJORADA */
+    /* TARJETA DE RESULTADO */
     div[data-testid="stVerticalBlockBorderWrapper"] {
         background-color: white;
         border-radius: 8px;
@@ -99,42 +100,55 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# --- 4. MOTORES DE EXTRACCIÓN PERSONALIZADOS ---
+# --- 4. BARRA LATERAL (RENDERIZADO INMEDIATO) ---
+with st.sidebar:
+    try:
+        # Usa una imagen que sepas que existe o texto si falla
+        st.image("https://manuelbot59.com/images/FirmaManuelBot59.png", use_column_width=True)
+    except:
+        st.markdown("## ManuelBot59")
+        
+    st.markdown("### 📌 Navegación")
+    st.markdown("""
+    - [🏠 Inicio](https://manuelbot59.com/)
+    - [🎓 Cursos](https://manuelbot59.com/formacion/)
+    - [🛒 Tienda](https://manuelbot59.com/tienda/)
+    - [🕵️ OSINT](https://manuelbot59.com/osint/)
+    """)
+    st.markdown("---")
+    st.markdown("### 📞 Soporte")
+    st.markdown("📧 **Email:** ManuelBot@proton.me")
+    st.markdown("✈️ **Telegram Soporte:** [ManuelBot59](https://t.me/ManuelBot59_Bot)")
+    st.markdown("---")
+    st.caption("v3.1 Stable | Powered by WhatsMyName")
+
+# --- 5. MOTORES DE EXTRACCIÓN ---
 
 def get_headers():
     return {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'}
 
-# A. Extractor de Telegram (Metadata Scraping)
 def extract_telegram(username):
     url = f"https://t.me/{username}"
     try:
         r = requests.get(url, headers=get_headers(), timeout=5)
         soup = BeautifulSoup(r.text, 'html.parser')
-        
-        # Buscar metadatos OpenGraph
         image = soup.find("meta", property="og:image")
         title = soup.find("meta", property="og:title")
         desc = soup.find("meta", property="og:description")
         
         details = {}
         img_url = None
-        
         if title:
-            # Telegram suele poner "Nombre - @username" o "Nombre"
             name_raw = title.get("content", "").replace("Telegram: Contact @", "")
             details["Nombre Visible"] = name_raw.split(" - ")[0] if " - " in name_raw else name_raw
-            
         if desc:
             details["Biografía"] = desc.get("content", "")
-            
         if image:
             img_url = image.get("content")
-            
         return details, img_url
     except:
         return {}, None
 
-# B. Extractor de GitHub (API)
 def extract_github(username):
     try:
         r = requests.get(f"https://api.github.com/users/{username}", headers=get_headers(), timeout=5)
@@ -144,83 +158,69 @@ def extract_github(username):
                 "Nombre": data.get("name"),
                 "Bio": data.get("bio"),
                 "Ubicación": data.get("location"),
-                "Empresa": data.get("company"),
                 "Twitter": data.get("twitter_username"),
-                "Repos Públicos": data.get("public_repos"),
+                "Repos": data.get("public_repos"),
                 "Seguidores": data.get("followers")
             }
-            # Limpiamos valores None
             return {k: v for k, v in details.items() if v}, data.get("avatar_url")
     except:
         pass
     return {}, None
 
-# C. Extractor de Gravatar (JSON)
 def extract_gravatar(username):
     try:
-        # Gravatar suele funcionar con hash de email, pero a veces el usuario es directo
         r = requests.get(f"https://en.gravatar.com/{username}.json", headers=get_headers(), timeout=5)
         if r.status_code == 200:
             data = r.json()['entry'][0]
             details = {
                 "Nombre": data.get("displayName"),
                 "Ubicación": data.get("currentLocation"),
-                "Sobre mí": data.get("aboutMe")
+                "Bio": data.get("aboutMe")
             }
-            img = data.get("thumbnailUrl")
-            return {k: v for k, v in details.items() if v}, img
+            return {k: v for k, v in details.items() if v}, data.get("thumbnailUrl")
     except:
         pass
     return {}, None
 
-# D. Extractor Genérico (Meta Tags)
 def extract_generic_meta(url):
     try:
         r = requests.get(url, headers=get_headers(), timeout=5)
         soup = BeautifulSoup(r.text, 'html.parser')
-        
         details = {}
         image = None
-        
-        # Título de la página
-        if soup.title:
-            details["Título Página"] = soup.title.string.strip()
-            
-        # Meta Descripción
-        desc = soup.find("meta", attrs={"name": "description"}) or soup.find("meta", property="og:description")
-        if desc:
-            details["Descripción"] = desc.get("content", "")[:200] + "..." # Limitamos largo
-            
-        # Imagen
+        if soup.title: details["Título"] = soup.title.string.strip()[:50]
         img = soup.find("meta", property="og:image")
-        if img:
-            image = img.get("content")
-            
+        if img: image = img.get("content")
         return details, image
     except:
         return {}, None
 
-# --- 5. LOGICA CENTRAL DE "SMART EXTRACT" ---
+# --- 6. VALIDACIÓN DE IMAGEN (SOLUCIÓN AL ERROR MEDIAFILESTORAGE) ---
+def validate_image_url(url):
+    """
+    Verifica si la URL es válida para Streamlit.
+    Si es inválida o nula, retorna una imagen por defecto.
+    """
+    default_img = "https://via.placeholder.com/128?text=Found" # Imagen segura
+    if not url or not url.startswith("http"):
+        return default_img
+    return url
+
+# --- 7. LOGICA CENTRAL ---
 def check_site(site, username):
     uri = site['uri_check'].format(account=username)
-    
-    # 1. Verificar Existencia (Fase Rápida)
     try:
         r = requests.get(uri, headers=get_headers(), timeout=6)
-        # Validación básica de código de estado
         if r.status_code != site['e_code']:
             return None
-        # Validación de texto falso positivo
         if site.get('e_string') and site['e_string'] not in r.text:
             return None
     except:
         return None
 
-    # 2. Extracción de Inteligencia (Fase Profunda)
-    # Seleccionamos el extractor según el sitio
+    # Extracción
     details = {}
     image_url = None
-    
     site_name = site['name'].lower()
     
     if "telegram" in site_name:
@@ -230,11 +230,8 @@ def check_site(site, username):
     elif "gravatar" in site_name:
         details, image_url = extract_gravatar(username)
     else:
-        # Intento genérico con BeautifulSoup primero (más rápido)
         details, image_url = extract_generic_meta(uri)
-        
-        # Si falla y tenemos socid, intentamos socid (más lento pero potente)
-        if not details and not image_url and socid_extract:
+        if not details and socid_extract:
             try:
                 data = socid_extract(uri)
                 if data:
@@ -243,23 +240,26 @@ def check_site(site, username):
             except:
                 pass
 
-    # Fallback de imagen (Favicon) si no encontramos nada
+    # Fallback de imagen
     if not image_url:
         try:
             domain = uri.split('/')[2]
             image_url = f"https://www.google.com/s2/favicons?domain={domain}&sz=128"
         except:
-            image_url = "https://via.placeholder.com/128?text=404"
+            image_url = None
+
+    # VALIDAR IMAGEN ANTES DE RETORNAR
+    final_image = validate_image_url(image_url)
 
     return {
         "name": site['name'],
         "uri": uri,
         "category": site['cat'],
-        "image": image_url,
+        "image": final_image, # URL segura garantizada
         "details": details
     }
 
-# --- 6. UTILIDADES AUXILIARES ---
+# --- 8. FUNCIONES AUXILIARES ---
 WMN_DATA_URL = "https://raw.githubusercontent.com/WebBreacher/WhatsMyName/main/wmn-data.json"
 APP_URL = "https://whatsmyname.streamlit.app/"
 
@@ -291,12 +291,10 @@ class PDFReport(FPDF):
         self.cell(0, 5, f'Pag {self.page_no()}', 0, 0, 'C')
 
 def generate_files(results, username):
-    # CSV
     df = pd.DataFrame(results)
     df_simple = df.drop(columns=['details', 'image'], errors='ignore')
     csv = df_simple.to_csv(index=False).encode('utf-8')
     
-    # TXT
     txt = io.StringIO()
     txt.write(f"REPORTE DE INVESTIGACION - USUARIO: {username}\n")
     txt.write(f"Herramienta: {APP_URL}\n")
@@ -308,7 +306,6 @@ def generate_files(results, username):
                 txt.write(f"  - {k}: {v}\n")
         txt.write("-" * 20 + "\n")
     
-    # PDF
     try:
         pdf = PDFReport()
         pdf.add_page()
@@ -332,32 +329,12 @@ def generate_files(results, username):
             pdf.set_text_color(0, 0, 255)
             pdf.cell(90, 8, clean_text("Enlace aqui"), 1, 1, 'C', link=item['uri'])
             pdf.set_text_color(0, 0, 0)
-        
         pdf_bytes = pdf.output(dest='S').encode('latin-1', 'ignore')
     except:
         pdf_bytes = None
-    
     return csv, txt.getvalue(), pdf_bytes
 
-# --- 7. INTERFAZ PRINCIPAL ---
-with st.sidebar:
-    try:
-        st.image("https://manuelbot59.com/images/FirmaManuelBot59.png", use_column_width=True)
-    except:
-        st.header("ManuelBot59")
-    st.markdown("### 📌 Navegación")
-    st.markdown("""
-    - [🏠 Inicio](https://manuelbot59.com/)
-    - [🎓 Cursos](https://manuelbot59.com/formacion/)
-    - [🛒 Tienda](https://manuelbot59.com/tienda/)
-    - [🕵️ OSINT](https://manuelbot59.com/osint/)
-    """)
-    st.markdown("---")
-    st.markdown("### 📞 Soporte")
-    st.markdown("📧 **Email:** ManuelBot@proton.me")
-    st.markdown("✈️ **Telegram Soporte:** [ManuelBot59](https://t.me/ManuelBot59_Bot)")
-    st.markdown("---")
-
+# --- 9. INTERFAZ PRINCIPAL ---
 st.markdown("<h1 class='main-title'>WhatsMyName Web</h1>", unsafe_allow_html=True)
 st.markdown("<p style='text-align: center; color: #666;'>Herramienta SOCMINT | Manuel Travezaño</p>", unsafe_allow_html=True)
 
@@ -372,6 +349,10 @@ with c2:
 with c3:
     run_btn = st.button("🔍 INVESTIGAR", use_container_width=True, type="primary")
 
+# --- 10. EJECUCIÓN CON BARRA DE PROGRESO ARRIBA ---
+# Contenedor para la barra de progreso (Arriba de los resultados)
+progress_placeholder = st.empty()
+# Contenedor para el Grid de resultados
 results_placeholder = st.container()
 
 if run_btn and username:
@@ -379,27 +360,34 @@ if run_btn and username:
     st.session_state.search_active = True
     
     target_sites = sites if cat_filter == "Todas" else [s for s in sites if s['cat'] == cat_filter]
-    prog_bar = st.progress(0)
-    status_text = st.empty()
+    
+    # Barra de progreso EN EL PLACEHOLDER SUPERIOR
+    with progress_placeholder.container():
+        prog_bar = st.progress(0)
+        status_text = st.empty()
+    
     processed = 0
     
+    # Inicializamos el grid vacío en el contenedor inferior
     with results_placeholder:
         st.markdown("### ⏳ Analizando y Extrayendo Datos...")
         grid_dynamic = st.empty()
     
-    # Reducimos hilos a 10 para dar tiempo a los scrapers de trabajar
     with ThreadPoolExecutor(max_workers=10) as executor:
         futures = {executor.submit(check_site, s, username): s for s in target_sites}
         
         for future in as_completed(futures):
             res = future.result()
             processed += 1
+            
+            # Actualizamos progreso ARRIBA
             if processed % 5 == 0 or processed == len(target_sites):
                 prog_bar.progress(processed / len(target_sites))
                 status_text.caption(f"Verificando: {processed}/{len(target_sites)}")
             
             if res:
                 st.session_state.results.append(res)
+                # Renderizado Progresivo ABAJO
                 with grid_dynamic.container():
                     cols = st.columns(2)
                     for i, item in enumerate(st.session_state.results):
@@ -422,14 +410,14 @@ if run_btn and username:
                                         with d2:
                                             for k, v in item['details'].items():
                                                 st.markdown(f"**{k}:** {v}")
-                                else:
-                                    st.caption("Solo detección de cuenta.")
 
-    prog_bar.progress(100)
-    if len(st.session_state.results) > 0:
-        status_text.success(f"✅ Finalizado. {len(st.session_state.results)} perfiles encontrados.")
-    else:
-        status_text.warning("❌ No se encontraron resultados.")
+    # Limpiar barra al terminar (Opcional, o dejar mensaje final)
+    with progress_placeholder.container():
+        prog_bar.progress(100)
+        if len(st.session_state.results) > 0:
+            status_text.success(f"✅ Finalizado. {len(st.session_state.results)} perfiles encontrados.")
+        else:
+            status_text.warning("❌ No se encontraron resultados.")
 
 elif st.session_state.results:
     with results_placeholder:
@@ -457,6 +445,7 @@ elif st.session_state.results:
                                 for k, v in item['details'].items():
                                     st.markdown(f"**{k}:** {v}")
 
+# --- 11. ZONA DE DESCARGA ---
 if st.session_state.results:
     st.divider()
     st.subheader("📥 Exportar Reporte")
