@@ -101,15 +101,48 @@ def extract_telegram(username):
     except:
         return {}, None
 
+# --- NUEVO EXTRACTOR GITLAB ---
+def extract_gitlab(username):
+    try:
+        # GitLab API devuelve una lista, buscamos por username exacto
+        r = requests.get(f"https://gitlab.com/api/v4/users?username={username}", headers=get_headers(), timeout=5)
+        if r.status_code == 200:
+            data_list = r.json()
+            if data_list and len(data_list) > 0:
+                user = data_list[0] # Tomamos el primer resultado
+                details = {
+                    "ID": user.get("id"),
+                    "Username": user.get("username"),
+                    "Nombre": user.get("name"),
+                    "Estado": user.get("state"),
+                    "Web URL": user.get("web_url")
+                }
+                return {k: v for k, v in details.items() if v}, user.get("avatar_url")
+    except:
+        pass
+    return {}, None
+
+# --- EXTRACTOR GITHUB MEJORADO ---
 def extract_github(username):
     try:
         r = requests.get(f"https://api.github.com/users/{username}", headers=get_headers(), timeout=5)
         if r.status_code == 200:
             data = r.json()
+            # Mapeo completo de campos solicitados
             details = {
-                "Nombre": data.get("name"), "Bio": data.get("bio"),
-                "Ubicación": data.get("location"), "Twitter": data.get("twitter_username"),
-                "Repos": data.get("public_repos")
+                "ID": data.get("id"),
+                "Nombre": data.get("name"),
+                "Bio": data.get("bio"),
+                "Compañía": data.get("company"),
+                "Blog": data.get("blog"),
+                "Ubicación": data.get("location"),
+                "Email": data.get("email"),
+                "Twitter": data.get("twitter_username"),
+                "Repos Públicos": data.get("public_repos"),
+                "Seguidores": data.get("followers"),
+                "Siguiendo": data.get("following"),
+                "Creado": data.get("created_at"),
+                "Actualizado": data.get("updated_at")
             }
             return {k: v for k, v in details.items() if v}, data.get("avatar_url")
     except:
@@ -152,8 +185,10 @@ def check_site(site, username):
     image_url = None
     site_name = site['name'].lower()
     
+    # Enrutamiento de extractores (AÑADIDO GITLAB)
     if "telegram" in site_name: details, image_url = extract_telegram(username)
     elif "github" in site_name: details, image_url = extract_github(username)
+    elif "gitlab" in site_name: details, image_url = extract_gitlab(username) # <--- GitLab Integrado
     elif "gravatar" in site_name: details, image_url = extract_gravatar(username)
     else:
         details, image_url = extract_generic_meta(uri)
@@ -210,7 +245,7 @@ def analyze_email(email):
 
     return results
 
-# --- 6. GENERADORES DE ARCHIVOS (AJUSTE FINAL DE FECHA) ---
+# --- 6. GENERADORES DE ARCHIVOS ---
 WMN_DATA_URL = "https://raw.githubusercontent.com/WebBreacher/WhatsMyName/main/wmn-data.json"
 APP_URL = "https://whatsmyname.streamlit.app/"
 
@@ -235,21 +270,20 @@ class PDFReport(FPDF):
         self.cell(0, 5, f'Pagina {self.page_no()}', 0, 0, 'C')
 
 def generate_files(results, target):
-    # Generar Fecha con Zona Horaria Local del Sistema (GMT/UTC offset)
+    # Generar Fecha con Zona Horaria Local
     now = datetime.now().astimezone() 
-    timestamp_display = now.strftime("%d/%m/%Y %H:%M:%S (GMT%z)") # Formato Local + Zona
+    timestamp_display = now.strftime("%d/%m/%Y %H:%M:%S (GMT%z)")
     timestamp_filename = now.strftime("%Y%m%d_%H%M%S")
 
     # 1. CSV
     df = pd.DataFrame(results)
-    # Añadimos la fecha a cada fila para registro
     df['fecha_extraccion'] = timestamp_display
     csv = df.drop(columns=['details', 'image'], errors='ignore').to_csv(index=False).encode('utf-8')
     
     # 2. TXT
     txt = io.StringIO()
     txt.write(f"REPORTE DE INVESTIGACION - USUARIO: {target}\n")
-    txt.write(f"Fecha de Extraccion: {timestamp_display}\n") # Fecha Local
+    txt.write(f"Fecha de Extraccion: {timestamp_display}\n")
     txt.write(f"Herramienta: {APP_URL}\n")
     txt.write("="*60 + "\n\n")
     for item in results:
@@ -268,7 +302,7 @@ def generate_files(results, target):
         pdf.set_font("Arial", size=10)
         
         pdf.cell(0, 10, clean_text(f"Objetivo: {target}"), ln=1)
-        pdf.cell(0, 10, clean_text(f"Fecha: {timestamp_display}"), ln=1) # Fecha Local
+        pdf.cell(0, 10, clean_text(f"Fecha: {timestamp_display}"), ln=1)
         pdf.cell(0, 10, f"Total Hallazgos: {len(results)}", ln=1)
         pdf.ln(10)
         
@@ -370,7 +404,6 @@ with tab1:
                                         st.markdown(f"<div class='site-title'>{item['name']}</div>", unsafe_allow_html=True)
                                         st.markdown(f"<span class='site-cat'>{item['category']}</span>", unsafe_allow_html=True)
                                         st.link_button("🔗 Visitar", item['uri'], use_container_width=True)
-                                        # ¡CORREGIDO: ELIMINADO EL TEXTO URL REDUNDANTE!
                                     
                                     if item.get('details'):
                                         with st.expander("👁️ Ver Detalles Extraídos"):
@@ -380,13 +413,14 @@ with tab1:
                                             with dc2:
                                                 for k, v in item['details'].items():
                                                     st.markdown(f"**{k}:** {v}")
+                                    else:
+                                        st.caption(f"URL: {item['uri']}")
         
         prog_bar.progress(100)
     
     if st.session_state.results:
         st.divider()
         st.subheader("📥 Exportar Reporte")
-        # Obtenemos contenido y nombre de archivo con TIMESTAMP
         csv, txt, pdf, ts_filename = generate_files(st.session_state.results, username)
         
         d1, d2, d3 = st.columns(3)
