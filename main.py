@@ -9,7 +9,6 @@ import io
 try:
     from socid_extractor import extract as socid_extract
 except ImportError:
-    # Fallback por si no se instala correctamente
     socid_extract = None
 
 # --- 1. CONFIGURACIÓN DE PÁGINA ---
@@ -20,7 +19,14 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# --- 2. ESTILOS CSS PROFESIONALES ---
+# --- 2. GESTIÓN DE ESTADO (CRÍTICO: SIEMPRE AL INICIO) ---
+# Inicializamos las variables ANTES de cualquier lógica
+if "results" not in st.session_state:
+    st.session_state.results = []
+if "search_active" not in st.session_state:
+    st.session_state.search_active = False
+
+# --- 3. ESTILOS CSS ---
 st.markdown("""
 <style>
     #MainMenu {visibility: hidden;}
@@ -42,16 +48,15 @@ st.markdown("""
         padding-top: 1rem;
     }
 
-    /* TARJETA DE RESULTADO */
+    /* ESTILO DE TARJETA TIPO "HIPPIE OSINT" */
     div[data-testid="stVerticalBlockBorderWrapper"] {
         background-color: white;
         border-radius: 8px;
         padding: 15px;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
         border: 1px solid #e2e8f0;
-        border-left: 5px solid #27ae60;
         margin-bottom: 15px;
-        transition: transform 0.2s;
+        transition: transform 0.2s, box-shadow 0.2s;
     }
     
     div[data-testid="stVerticalBlockBorderWrapper"]:hover {
@@ -93,7 +98,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# --- 3. FUNCIONES AUXILIARES Y EXTRACTOR ---
+# --- 4. FUNCIONES AUXILIARES Y EXTRACTOR ---
 WMN_DATA_URL = "https://raw.githubusercontent.com/WebBreacher/WhatsMyName/main/wmn-data.json"
 APP_URL = "https://whatsmyname.streamlit.app/"
 
@@ -107,24 +112,17 @@ def load_sites():
         return []
 
 def get_profile_details(url):
-    """
-    Usa socid-extractor para obtener datos reales del perfil.
-    Retorna un diccionario con la info y la imagen.
-    """
+    """ Usa socid-extractor para obtener datos reales """
     if not socid_extract:
         return {}, None
 
     try:
-        # socid-extractor intenta hacer scraping del sitio
         data = socid_extract(url)
-        
         if not data:
             return {}, None
             
-        # Filtramos campos vacíos
         details = {k: v for k, v in data.items() if v and k != 'image'}
         image = data.get('image')
-        
         return details, image
     except:
         return {}, None
@@ -133,18 +131,17 @@ def check_site(site, username):
     uri = site['uri_check'].format(account=username)
     try:
         headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
-        # 1. Validación rápida de existencia
+        # 1. Validación rápida
         r = requests.get(uri, headers=headers, timeout=5)
         
         if r.status_code == site['e_code']:
             if site.get('e_string') and site['e_string'] not in r.text:
                 return None
             
-            # 2. Extracción de Inteligencia (Fase Lenta pero Rica)
-            # Solo ejecutamos esto si el sitio existe
+            # 2. Extracción profunda
             extracted_details, extracted_image = get_profile_details(uri)
             
-            # Fallback de imagen si socid no encuentra nada
+            # Fallback de imagen
             if not extracted_image:
                 domain = uri.split('/')[2]
                 extracted_image = f"https://www.google.com/s2/favicons?domain={domain}&sz=128"
@@ -160,7 +157,7 @@ def check_site(site, username):
         return None
     return None
 
-# --- 4. GENERACIÓN DE REPORTES (BLINDADO) ---
+# --- 5. GENERACIÓN DE REPORTES (BLINDADO) ---
 def clean_text(text):
     if not isinstance(text, str): return str(text)
     return text.encode('latin-1', 'replace').decode('latin-1')
@@ -193,7 +190,7 @@ def generate_files(results, username):
     txt.write("="*60 + "\n\n")
     for item in results:
         txt.write(f"Plataforma: {item['name']}\nURL: {item['uri']}\n")
-        if item['details']:
+        if item.get('details'):
             txt.write(f"  > Datos: {item['details']}\n")
     
     # PDF
@@ -206,14 +203,12 @@ def generate_files(results, username):
         pdf.cell(0, 10, f"Total Hallazgos: {len(results)}", ln=1)
         pdf.ln(5)
         
-        # Encabezados
         pdf.set_fill_color(240, 240, 240)
         pdf.set_font("Arial", 'B', 9)
         pdf.cell(60, 8, clean_text("Plataforma"), 1, 0, 'L', 1)
         pdf.cell(40, 8, clean_text("Categoría"), 1, 0, 'L', 1)
         pdf.cell(90, 8, clean_text("Enlace"), 1, 1, 'L', 1)
         
-        # Filas
         pdf.set_font("Arial", size=9)
         for item in results:
             name = clean_text(item['name'][:30])
@@ -222,7 +217,6 @@ def generate_files(results, username):
             pdf.cell(60, 8, name, 1)
             pdf.cell(40, 8, cat, 1)
             
-            # ENLACE LIMPIO
             pdf.set_text_color(0, 0, 255)
             pdf.cell(90, 8, clean_text("Enlace aqui"), 1, 1, 'C', link=item['uri'])
             pdf.set_text_color(0, 0, 0)
@@ -233,8 +227,8 @@ def generate_files(results, username):
         
     return csv, txt.getvalue(), pdf_bytes
 
-# --- 5. INTERFAZ PRINCIPAL ---
-# BARRA LATERAL
+# --- 6. INTERFAZ PRINCIPAL ---
+# BARRA LATERAL (Siempre primero)
 with st.sidebar:
     try:
         st.image("https://manuelbot59.com/images/FirmaManuelBot59.png", use_column_width=True)
@@ -275,6 +269,8 @@ results_placeholder = st.container()
 # Lógica de Ejecución
 if run_btn and username:
     st.session_state.results = []
+    st.session_state.search_active = True # Marcamos que estamos buscando
+    
     target_sites = sites if cat_filter == "Todas" else [s for s in sites if s['cat'] == cat_filter]
     
     prog_bar = st.progress(0)
@@ -285,7 +281,7 @@ if run_btn and username:
         st.markdown("### ⏳ Analizando y Extrayendo Datos...")
         grid_dynamic = st.empty()
     
-    # Reducimos hilos a 10 porque socid-extractor consume más recursos
+    # Hilos reducidos para estabilidad con socid-extractor
     with ThreadPoolExecutor(max_workers=10) as executor:
         futures = {executor.submit(check_site, s, username): s for s in target_sites}
         
@@ -300,13 +296,12 @@ if run_btn and username:
             if res:
                 st.session_state.results.append(res)
                 
-                # --- RENDERIZADO PROGRESIVO ---
+                # Renderizado Progresivo
                 with grid_dynamic.container():
                     cols = st.columns(2)
                     for i, item in enumerate(st.session_state.results):
                         with cols[i % 2]:
                             with st.container(border=True):
-                                # Cabecera Tarjeta
                                 c1, c2, c3 = st.columns([1, 4, 2])
                                 with c1:
                                     st.image(item['image'], width=45)
@@ -316,8 +311,7 @@ if run_btn and username:
                                 with c3:
                                     st.link_button("🔗 Visitar", item['uri'], use_container_width=True)
                                 
-                                # Detalles Extraídos (Si existen)
-                                if item['details']:
+                                if item.get('details'):
                                     with st.expander("👁️ Ver Detalles Extraídos", expanded=False):
                                         d1, d2 = st.columns([1, 2])
                                         with d1:
@@ -326,7 +320,6 @@ if run_btn and username:
                                             for k, v in item['details'].items():
                                                 st.markdown(f"**{k}:** {v}")
                                 else:
-                                    # Si no hay datos extra, solo mostramos un mensaje discreto o nada
                                     st.caption("Solo detección de cuenta.")
 
     prog_bar.progress(100)
@@ -335,8 +328,9 @@ if run_btn and username:
     else:
         status_text.warning("❌ No se encontraron resultados.")
 
-# Renderizado Persistente
-elif st.session_state.results:
+# RENDERIZADO PERSISTENTE (SOLUCIÓN AL ERROR DE PANTALLA EN BLANCO)
+# Se ejecuta si hay resultados en memoria Y NO se está buscando activamente en este momento
+elif "results" in st.session_state and st.session_state.results and not run_btn:
     with results_placeholder:
         st.divider()
         st.markdown(f"### 🎯 Resultados: {len(st.session_state.results)}")
@@ -353,7 +347,7 @@ elif st.session_state.results:
                     with c3:
                         st.link_button("🔗 Visitar", item['uri'], use_container_width=True)
                     
-                    if item['details']:
+                    if item.get('details'):
                         with st.expander("👁️ Ver Detalles Extraídos"):
                             d1, d2 = st.columns([1, 2])
                             with d1:
@@ -361,9 +355,11 @@ elif st.session_state.results:
                             with d2:
                                 for k, v in item['details'].items():
                                     st.markdown(f"**{k}:** {v}")
+                    else:
+                        st.caption("Solo detección de cuenta.")
 
-# --- 6. ZONA DE DESCARGA ---
-if st.session_state.results:
+# --- 7. ZONA DE DESCARGA ---
+if "results" in st.session_state and st.session_state.results:
     st.divider()
     st.subheader("📥 Exportar Reporte")
     
@@ -380,10 +376,10 @@ if st.session_state.results:
         else:
             st.warning("⚠️ Error generando PDF")
 
-# Footer
+# Footer (Siempre al final, fuera de condicionales)
 st.markdown("""
 <div class="footer-credits">
-    This tool is powered by <a href="https://github.com/WebBreacher/WhatsMyName" target="_blank">WhatsMyName</a><br>
+    This tool is powered by <a href="https://github.com/WebBreacher/WhatsMyName" target="_blank">WhatsMyName</a> & <a href="https://github.com/soxoj/socid-extractor" target="_blank">socid-extractor</a><br>
     Implementation and optimization by <a href="https://x.com/ManuelBot59" target="_blank"><strong>Manuel Travezaño</strong></a>
 </div>
 """, unsafe_allow_html=True)
