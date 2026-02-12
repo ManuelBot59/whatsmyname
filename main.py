@@ -165,7 +165,7 @@ with st.sidebar:
     st.markdown("---")
     st.markdown("### 📞 Contacto")
     st.markdown("📧 **Email:** ManuelBot@proton.me")
-    st.markdown("✈️ **Telegram:** [ManuelBot59](https://t.me/ManuelBot59_Bot)")
+    st.markdown("✈️ **Telegram Soporte:** [ManuelBot59](https://t.me/ManuelBot59_Bot)")
     
     st.markdown("---")
     st.info("Esta herramienta realiza una enumeración de usuarios en +500 sitios web públicos utilizando técnicas SOCMINT.")
@@ -248,6 +248,6 @@ if start_btn:
 st.markdown("""
 <div class="footer-credits">
     This tool is powered by <a href="https://github.com/WebBreacher/WhatsMyName" target="_blank">WhatsMyName</a><br>
-    Implementation and optimization by <strong>Manuel Travezaño</strong>
+    Implementation and optimization by <a href="https://x.com/ManuelBot59" target="_blank"><strong>Manuel Travezaño</strong></a>
 </div>
 """, unsafe_allow_html=True)
