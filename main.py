@@ -101,26 +101,44 @@ def extract_telegram(username):
     except:
         return {}, None
 
-# --- EXTRACTOR GITLAB (MANTENIDO) ---
+# --- EXTRACTOR GITLAB (JSON API) ---
 def extract_gitlab(username):
     try:
-        # Buscamos por username exacto en la API
         r = requests.get(f"https://gitlab.com/api/v4/users?username={username}", headers=get_headers(), timeout=5)
         if r.status_code == 200:
             data_list = r.json()
             if data_list and len(data_list) > 0:
                 user = data_list[0]
-                # Mapeo exacto de los campos solicitados
                 details = {
                     "ID": user.get("id"),
                     "Username": user.get("username"),
                     "Nombre": user.get("name"),
-                    "Email Público": user.get("public_email", "No público"),
                     "Estado": user.get("state"),
-                    "Bloqueado": str(user.get("locked")), 
+                    "Email Público": user.get("public_email", "Oculto"),
                     "Web URL": user.get("web_url")
                 }
                 return {k: v for k, v in details.items() if v}, user.get("avatar_url")
+    except:
+        pass
+    return {}, None
+
+# --- EXTRACTOR GITHUB (Restaurado Básico) ---
+def extract_github(username):
+    try:
+        # Usamos requests simple para asegurar detección
+        url = f"https://github.com/{username}"
+        r = requests.get(url, headers=get_headers(), timeout=5)
+        if r.status_code == 200:
+            soup = BeautifulSoup(r.text, 'html.parser')
+            # Intentamos sacar datos básicos del meta para no bloquearnos con API rate limits por ahora
+            desc = soup.find("meta", property="og:description")
+            image = soup.find("meta", property="og:image")
+            
+            details = {}
+            if desc: details["Bio"] = desc.get("content", "")
+            img_url = image.get("content") if image else None
+            
+            return details, img_url
     except:
         pass
     return {}, None
@@ -148,7 +166,7 @@ def extract_generic_meta(url):
     except:
         return {}, None
 
-# --- LÓGICA DE DETECCIÓN INTELIGENTE ---
+# --- LÓGICA DE DETECCIÓN ---
 def check_site(site, username):
     uri = site['uri_check'].format(account=username)
     
@@ -164,15 +182,17 @@ def check_site(site, username):
     image_url = None
     site_name = site['name'].lower()
     
-    # Enrutamiento de extractores (GitHub eliminado para evitar conflictos)
+    # Enrutamiento
     if "telegram" in site_name: 
         details, image_url = extract_telegram(username)
     elif "gitlab" in site_name: 
         details, image_url = extract_gitlab(username)
+    elif "github" in site_name:
+        details, image_url = extract_github(username)
     elif "gravatar" in site_name: 
         details, image_url = extract_gravatar(username)
     else:
-        # Extracción genérica + socid (GitHub caerá aquí, lo cual es más seguro)
+        # Genérico + Socid
         details, image_url = extract_generic_meta(uri)
         if not details and socid_extract:
             try:
@@ -260,7 +280,7 @@ class PDFReport(FPDF):
         self.cell(0, 5, f'Pagina {self.page_no()}', 0, 0, 'C')
 
 def generate_files(results, target):
-    # Timestamp con Zona Horaria Local
+    # Generar Fecha con Zona Horaria Local
     now = datetime.now().astimezone() 
     timestamp_display = now.strftime("%d/%m/%Y %H:%M:%S (GMT%z)")
     timestamp_filename = now.strftime("%Y%m%d_%H%M%S")
@@ -394,6 +414,7 @@ with tab1:
                                         st.markdown(f"<div class='site-title'>{item['name']}</div>", unsafe_allow_html=True)
                                         st.markdown(f"<span class='site-cat'>{item['category']}</span>", unsafe_allow_html=True)
                                         st.link_button("🔗 Visitar", item['uri'], use_container_width=True)
+                                        # ELIMINADO EL TEXTO URL DUPLICADO
                                     
                                     if item.get('details'):
                                         with st.expander("👁️ Ver Detalles Extraídos"):
@@ -403,8 +424,6 @@ with tab1:
                                             with dc2:
                                                 for k, v in item['details'].items():
                                                     st.markdown(f"**{k}:** {v}")
-                                    else:
-                                        st.caption(f"URL: {item['uri']}")
         
         prog_bar.progress(100)
     
