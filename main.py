@@ -8,8 +8,9 @@ from bs4 import BeautifulSoup
 import dns.resolver
 from email_validator import validate_email, EmailNotValidError
 import urllib.parse
+from datetime import datetime # <--- NUEVO: Para la marca de tiempo
 
-# Importamos socid-extractor de forma segura
+# Importamos socid-extractor
 try:
     from socid_extractor import extract as socid_extract
 except ImportError:
@@ -47,7 +48,7 @@ st.markdown("""
         padding-top: 1rem;
     }
 
-    /* Tarjetas */
+    /* Tarjetas de Resultados */
     div[data-testid="stVerticalBlockBorderWrapper"] {
         background-color: white;
         border-radius: 8px;
@@ -67,7 +68,7 @@ st.markdown("""
     .site-title { font-size: 1.1rem; font-weight: 700; color: #1c3961; }
     .site-cat { font-size: 0.8rem; color: #64748b; background-color: #f1f5f9; padding: 2px 8px; border-radius: 12px; }
 
-    /* Footer Nuevo */
+    /* Footer */
     .footer-credits {
         text-align: center; margin-top: 50px; padding: 20px;
         border-top: 1px solid #ddd; font-size: 0.85em; color: #666;
@@ -150,6 +151,7 @@ def check_site(site, username):
     image_url = None
     site_name = site['name'].lower()
     
+    # Enrutamiento de extractores
     if "telegram" in site_name: details, image_url = extract_telegram(username)
     elif "github" in site_name: details, image_url = extract_github(username)
     elif "gravatar" in site_name: details, image_url = extract_gravatar(username)
@@ -208,7 +210,7 @@ def analyze_email(email):
 
     return results
 
-# --- 6. GENERADORES DE ARCHIVOS (CORREGIDO Y RESTAURADO) ---
+# --- 6. GENERADORES DE ARCHIVOS (CON TIMESTAMP) ---
 WMN_DATA_URL = "https://raw.githubusercontent.com/WebBreacher/WhatsMyName/main/wmn-data.json"
 APP_URL = "https://whatsmyname.streamlit.app/"
 
@@ -216,70 +218,66 @@ def clean_text(text):
     if not isinstance(text, str): return str(text)
     return text.encode('latin-1', 'replace').decode('latin-1')
 
-# --- CLASE PDF PERSONALIZADA CON CABECERA Y PIE ---
+# Clase PDF personalizada
 class PDFReport(FPDF):
     def header(self):
         self.set_font('Arial', 'B', 15)
-        # Cabecera restaurada
         self.cell(0, 10, clean_text('Reporte SOCMINT - WhatsMyName Web'), 0, 1, 'C')
         self.ln(5)
 
     def footer(self):
-        self.set_y(-25) # Espacio para 3 líneas
+        self.set_y(-25)
         self.set_font('Arial', 'I', 8)
-        # Línea 1: Autor y Herramienta
         self.cell(0, 5, clean_text('Herramienta: WhatsMyName Web | Autor: Manuel Travezaño'), 0, 1, 'C')
-        
-        # Línea 2: Enlace Web (Azul)
         self.set_text_color(0, 0, 255)
         self.cell(0, 5, APP_URL, 0, 1, 'C', link=APP_URL)
-        
-        # Línea 3: Paginación (Negro)
         self.set_text_color(0, 0, 0)
         self.cell(0, 5, f'Pagina {self.page_no()}', 0, 0, 'C')
 
 def generate_files(results, target):
+    # Generar Marcas de Tiempo
+    now = datetime.now()
+    timestamp_display = now.strftime("%d/%m/%Y %H:%M:%S")
+    timestamp_filename = now.strftime("%Y%m%d_%H%M%S")
+
     # 1. CSV
     df = pd.DataFrame(results)
+    # Añadir fecha de extracción al CSV
+    df['fecha_extraccion'] = timestamp_display
     csv = df.drop(columns=['details', 'image'], errors='ignore').to_csv(index=False).encode('utf-8')
     
-    # 2. TXT (Restaurado)
+    # 2. TXT
     txt = io.StringIO()
-    txt.write(f"REPORTE DE INVESTIGACION SOCMINT\n")
-    txt.write(f"Usuario Investigado: {target}\n")
+    txt.write(f"REPORTE DE INVESTIGACION - USUARIO: {target}\n")
+    txt.write(f"Fecha de Extraccion: {timestamp_display}\n") # Timestamp
     txt.write(f"Herramienta: {APP_URL}\n")
     txt.write("="*60 + "\n\n")
     for item in results:
         txt.write(f"Plataforma: {item['name']}\n")
         txt.write(f"URL: {item['uri']}\n")
-        txt.write(f"Categoria: {item['category']}\n")
         if item.get('details'):
-            txt.write("Detalles Extraidos:\n")
             for k, v in item['details'].items():
                 txt.write(f"  - {k}: {v}\n")
         txt.write("-" * 20 + "\n")
     
-    # 3. PDF (Restaurado con PDFReport)
+    # 3. PDF
     pdf_bytes = None
     try:
-        # ¡AQUÍ ESTABA EL ERROR! Ahora usamos la clase personalizada PDFReport
         pdf = PDFReport() 
         pdf.add_page()
         pdf.set_font("Arial", size=10)
         
-        # Información del Objetivo al inicio
-        pdf.cell(0, 10, clean_text(f"Usuario Investigado: {target}"), ln=1)
+        pdf.cell(0, 10, clean_text(f"Objetivo: {target}"), ln=1)
+        pdf.cell(0, 10, clean_text(f"Fecha: {timestamp_display}"), ln=1) # Timestamp
         pdf.cell(0, 10, f"Total Hallazgos: {len(results)}", ln=1)
         pdf.ln(10)
         
-        # Encabezados de Tabla
         pdf.set_fill_color(240, 240, 240)
         pdf.set_font("Arial", 'B', 9)
         pdf.cell(50, 8, clean_text("Plataforma"), 1, 0, 'L', 1)
         pdf.cell(40, 8, clean_text("Categoría"), 1, 0, 'L', 1)
         pdf.cell(100, 8, clean_text("Enlace"), 1, 1, 'L', 1)
         
-        # Filas
         pdf.set_font("Arial", size=9)
         for item in results:
             name = clean_text(item['name'][:25])
@@ -288,9 +286,8 @@ def generate_files(results, target):
             pdf.cell(50, 8, name, 1)
             pdf.cell(40, 8, cat, 1)
             
-            # Enlace limpio y clickeable
             pdf.set_text_color(0, 0, 255)
-            pdf.cell(100, 8, clean_text("Ir al perfil"), 1, 0, link=item['uri'])
+            pdf.cell(100, 8, clean_text("Enlace al perfil"), 1, 0, link=item['uri'])
             pdf.set_text_color(0, 0, 0)
             pdf.ln()
             
@@ -299,7 +296,7 @@ def generate_files(results, target):
         print(f"Error PDF: {e}")
         pdf_bytes = None
         
-    return csv, txt.getvalue(), pdf_bytes
+    return csv, txt.getvalue(), pdf_bytes, timestamp_filename
 
 # --- 7. INTERFAZ ---
 @st.cache_data
@@ -324,7 +321,7 @@ st.markdown("<h1 class='main-title'>ManuelBot59 Suite OSINT</h1>", unsafe_allow_
 
 tab1, tab2 = st.tabs(["👤 Búsqueda de Usuario", "📧 Análisis de Correo"])
 
-# TAB 1
+# TAB 1: USUARIOS
 with tab1:
     st.markdown("### 🔎 Rastreador de Huella Digital")
     progress_placeholder = st.empty()
@@ -373,26 +370,38 @@ with tab1:
                                         st.markdown(f"<div class='site-title'>{item['name']}</div>", unsafe_allow_html=True)
                                         st.markdown(f"<span class='site-cat'>{item['category']}</span>", unsafe_allow_html=True)
                                         st.link_button("🔗 Visitar", item['uri'], use_container_width=True)
+                                    
                                     if item.get('details'):
-                                        with st.expander("Detalles"):
-                                            for k, v in item['details'].items():
-                                                st.markdown(f"**{k}:** {v}")
+                                        with st.expander("👁️ Ver Detalles Extraídos"):
+                                            dc1, dc2 = st.columns([1, 2])
+                                            with dc1:
+                                                st.image(item['image'], use_column_width=True, caption="Perfil")
+                                            with dc2:
+                                                for k, v in item['details'].items():
+                                                    st.markdown(f"**{k}:** {v}")
+                                    else:
+                                        st.caption(f"URL: {item['uri']}")
         
         prog_bar.progress(100)
     
     if st.session_state.results:
         st.divider()
         st.subheader("📥 Exportar Reporte")
-        csv, txt, pdf = generate_files(st.session_state.results, username)
+        # Generamos archivos y timestamp
+        csv, txt, pdf, ts_filename = generate_files(st.session_state.results, username)
         
         d1, d2, d3 = st.columns(3)
-        with d1: st.download_button("📄 Descargar CSV", csv, f"{username}.csv", "text/csv", use_container_width=True)
-        with d2: st.download_button("📝 Descargar TXT", txt, f"{username}.txt", "text/plain", use_container_width=True)
+        with d1: 
+            st.download_button("📄 Descargar CSV", csv, f"{username}_{ts_filename}.csv", "text/csv", use_container_width=True)
+        with d2: 
+            st.download_button("📝 Descargar TXT", txt, f"{username}_{ts_filename}.txt", "text/plain", use_container_width=True)
         with d3:
-            if pdf: st.download_button("📕 Descargar PDF", pdf, f"{username}.pdf", "application/pdf", use_container_width=True)
-            else: st.warning("PDF no disponible (Error de formato)")
+            if pdf: 
+                st.download_button("📕 Descargar PDF", pdf, f"{username}_{ts_filename}.pdf", "application/pdf", use_container_width=True)
+            else: 
+                st.warning("PDF no disponible (Error de formato)")
 
-# TAB 2
+# TAB 2: CORREOS
 with tab2:
     st.markdown("### 📧 Inteligencia de Correo")
     email_in = st.text_input("Correo electrónico", placeholder="ejemplo@gmail.com")
@@ -414,6 +423,7 @@ with tab2:
                     g = data['gravatar']
                     st.image(g['image'], width=80)
                     st.write(f"**Nombre:** {g['name']}")
+                
                 if data.get('duolingo'):
                     st.success("✅ Duolingo Detectado")
                     d = data['duolingo']
@@ -427,7 +437,7 @@ with tab2:
             links = [
                 ("Duolingo", f"https://www.duolingo.com/2017-06-30/users?email={email_in}"),
                 ("Spotify", f"https://spclient.wg.spotify.com/signup/public/v1/account?validate=1&email={email_in}"),
-                ("Twitter API", f"https://api.twitter.com/i/users/email_available.json?email={email_in}"),
+                ("Twitter", f"https://api.twitter.com/i/users/email_available.json?email={email_in}"),
                 ("HaveIBeenPwned", f"https://haveibeenpwned.com/account/{email_in}"),
                 ("Intelx", f"https://intelx.io/?s={encoded_email}"),
                 ("GitHub Commits", f"https://github.com/search?q=committer-email:{email_in}&type=commits")
