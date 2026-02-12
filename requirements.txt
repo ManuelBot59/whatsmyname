@@ -1,0 +1,6 @@
+Flask
+Flask-SocketIO
+socid-extractor
+requests
+gunicorn
+gevent

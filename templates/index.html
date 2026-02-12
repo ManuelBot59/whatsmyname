@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WhatsMyName Web</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.0/socket.io.js"></script>
+    <style>
+        :root {
+            --primary: #7c3aed;
+            --secondary: #00ff88;
+            --background: #0f172a;
+            --glass: rgba(255, 255, 255, 0.05);
+        }
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Inter', sans-serif;
+        }
+        body {
+            background: linear-gradient(45deg, #0f172a, #1e293b);
+            color: #fff;
+            min-height: 100vh;
+            padding: 2rem;
+        }
+        .container { max-width: 1200px; margin: 0 auto; }
+        .header { text-align: center; margin-bottom: 3rem; position: relative; }
+        .logo {
+            width: 100px;
+            filter: drop-shadow(0 0 10px rgba(124, 58, 237, 0.5));
+            margin-bottom: 1rem;
+            animation: float 3s ease-in-out infinite;
+        }
+        .title {
+            font-size: 2.5rem;
+            background: linear-gradient(to right, var(--primary), var(--secondary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 0.5rem;
+        }
+        .search-box {
+            background: var(--glass);
+            backdrop-filter: blur(12px);
+            border-radius: 20px;
+            padding: 2rem;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            margin-bottom: 2rem;
+        }
+        .form-group { margin-bottom: 1.5rem; }
+        .input-field {
+            width: 100%;
+            padding: 1rem;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            color: #fff;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+            -webkit-appearance: none;
+            appearance: none;
+        }
+        .input-field option {
+            background-color: #1e293b;
+            color: #fff;
+            padding: 10px;
+        }
+        .input-field:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.3);
+        }
+        select.input-field {
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 1rem center;
+            background-size: 1em;
+            padding-right: 2.5rem;
+        }
+        .search-btn {
+            background: linear-gradient(45deg, var(--primary), var(--secondary));
+            border: none;
+            padding: 1rem 2rem;
+            border-radius: 10px;
+            color: #fff;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.3s ease;
+            width: 100%;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .search-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(124, 58, 237, 0.4);
+        }
+        .progress-container {
+            background: var(--glass);
+            border-radius: 15px;
+            padding: 1.5rem;
+            margin: 2rem 0;
+            backdrop-filter: blur(5px);
+        }
+        .progress-text {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 1rem;
+            color: #94a3b8;
+        }
+        .progress-bar {
+            height: 8px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--primary), var(--secondary));
+            transition: width 0.3s ease;
+        }
+        .results-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 1.5rem;
+            margin-top: 2rem;
+        }
+        .result-card {
+            background: var(--glass);
+            border-radius: 15px;
+            padding: 1.5rem;
+            backdrop-filter: blur(5px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            transition: all 0.3s ease;
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+        }
+        .result-card.expanded {
+            grid-column: 1 / -1;
+            transform: none !important;
+        }
+        .card-content {
+            margin-top: 1rem;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            padding-top: 1rem;
+        }
+        .extracted-info {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+        .info-item {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 0.75rem;
+            border-radius: 8px;
+            word-break: break-word;
+        }
+        .info-label {
+            font-size: 0.8rem;
+            color: var(--secondary);
+            margin-bottom: 0.25rem;
+            font-weight: 500;
+        }
+        .info-value {
+            font-size: 0.9rem;
+            color: #fff;
+        }
+        .no-info {
+            color: #94a3b8;
+            font-style: italic;
+            text-align: center;
+            padding: 1rem;
+        }
+        @keyframes float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
+        }
+        .loading-dots {
+            display: flex;
+            justify-content: center;
+            gap: 0.5rem;
+            margin-top: 1rem;
+        }
+        .dot {
+            width: 8px;
+            height: 8px;
+            background: var(--secondary);
+            border-radius: 50%;
+            animation: bounce 1.4s infinite ease-in-out;
+        }
+        .dot:nth-child(2) { animation-delay: 0.2s; }
+        .dot:nth-child(3) { animation-delay: 0.4s; }
+        @keyframes bounce {
+            0%, 80%, 100% { transform: translateY(0); }
+            40% { transform: translateY(-10px); }
+        }
+        .favicon {
+            width: 48px;
+            height: 48px;
+        }
+        .info-image {
+            max-width: 100%;
+            height: auto;
+            border-radius: 8px;
+        }
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        .modal-content {
+            background: var(--glass);
+            border-radius: 15px;
+            padding: 2rem;
+            max-width: 600px;
+            width: 90%;
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            position: relative;
+            transform: translate(-50%, -50%);
+            top: 50%;
+            left: 50%;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+        .close-modal {
+            position: absolute;
+            top: 1rem;
+            right: 1rem;
+            cursor: pointer;
+            font-size: 1.5rem;
+            color: #fff;
+        }
+        .view-details-btn {
+            background: linear-gradient(45deg, var(--primary), var(--secondary));
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            color: #fff;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.3s ease;
+            margin-top: 1rem;
+        }
+        .view-details-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(124, 58, 237, 0.4);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <img src="https://github.com/WebBreacher/WhatsMyName/blob/main/whatsmyname.png?raw=true" class="logo" alt="Logo">
+            <h1 class="title">WhatsMyName Web</h1>
+        </header>
+        <div class="search-box">
+            <form id="searchForm">
+                <div class="form-group">
+                    <input type="text" class="input-field" id="username" placeholder="Enter username" required>
+                </div>
+                <div class="form-group">
+                    <select class="input-field" id="category">
+                        <option value="">All Categories</option>
+                    </select>
+                </div>
+                <button type="submit" class="search-btn">Search</button>
+            </form>
+        </div>
+        <div class="progress-container" id="progress" style="display: none;">
+            <div class="progress-text">
+                <span>Found: <span id="foundCount">0</span></span>
+                <span>Processed: <span id="processedCount">0</span>/<span id="totalCount">0</span></span>
+            </div>
+            <div class="progress-bar">
+                <div class="progress-fill" style="width: 0%"></div>
+            </div>
+            <div class="loading-dots">
+                <div class="dot"></div>
+                <div class="dot"></div>
+                <div class="dot"></div>
+            </div>
+        </div>
+        <div class="results-grid" id="resultsHTML"></div>
+    </div>
+    <div class="modal" id="detailsModal">
+        <div class="modal-content">
+            <span class="close-modal" id="closeModal">&times;</span>
+            <div id="modalContent"></div>
+        </div>
+    </div>
+    <script>
+        $(document).ready(function() {
+            const socket = io();
+            
+            function loadCategories(categories) {
+                const categorySelect = $('#category');
+                categorySelect.empty().append(new Option("All Categories", ""));
+                categories.forEach(cat => categorySelect.append(new Option(cat, cat)));
+            }
+            
+            function updateProgress(processed, total) {
+                const percent = (processed / total) * 100;
+                $('.progress-fill').css('width', `${percent}%`);
+            }
+            
+            function resetSearch() {
+                $('#progress').show();
+                $('#resultsHTML').empty();
+                $('.progress-fill').css('width', '0%');
+                $('.loading-dots').show();
+                $('#foundCount').text('0');
+                $('#processedCount').text('0');
+                $('#totalCount').text('0');
+            }
+            
+            $('#searchForm').submit(function(e) {
+                e.preventDefault();
+                const username = $('#username').val();
+                const category = $('#category').val();
+                resetSearch();
+                socket.emit('start_search', { username, category });
+            });
+            
+            socket.on('progress', data => {
+                $('#processedCount').text(data.processed);
+                $('#totalCount').text(data.total);
+                updateProgress(data.processed, data.total);
+            });
+            
+            socket.on('new_result', data => {
+                const domain = new URL(data.url).hostname;
+                const favicon = `https://www.google.com/s2/favicons?domain=${domain}&sz=64`;
+                
+                let extractedInfoHTML = '';
+                if (data.extracted_info && Object.keys(data.extracted_info).length > 0) {
+                    extractedInfoHTML = `
+                        <div class="extracted-info">
+                            ${Object.entries(data.extracted_info).map(([key, value]) => `
+                                <div class="info-item">
+                                    <div class="info-label">${key}</div>
+                                    ${key === 'Image' ? `<img src="${value}" class="info-image" alt="Image">` : `<div class="info-value">${value}</div>`}
+                                </div>
+                            `).join('')}
+                        </div>
+                    `;
+                }
+                
+                const card = `
+                    <div class="result-card">
+                        <div class="card-header" data-url="${data.url}">
+                            <img src="${favicon}" class="favicon" alt="Favicon">
+                            <div>
+                                <div class="site-name">Site Name: ${data.site_name}</div>
+                                <div class="username">Username: ${data.username}</div>
+                                <div class="category">Category: ${data.category}</div>
+                            </div>
+                        </div>
+                        ${extractedInfoHTML ? `
+                            <button class="view-details-btn">View Details</button>
+                            <div class="card-content" style="display: none;">
+                                <div class="extracted-info-container">
+                                    <h3>Extracted Information</h3>
+                                    ${extractedInfoHTML}
+                                </div>
+                            </div>
+                        ` : ''}
+                    </div>
+                `;
+                
+                $('#resultsHTML').append(card);
+            });
+            
+            $(document).on('click', '.view-details-btn', function(e) {
+                e.stopPropagation();
+                const content = $(this).siblings('.card-content').html();
+                $('#modalContent').html(content);
+                $('#detailsModal').fadeIn();
+            });
+            
+            $('#closeModal').click(function() {
+                $('#detailsModal').fadeOut();
+            });
+            
+            $(document).on('click', '.result-card', function(e) {
+                const url = $(this).find('.card-header').data('url');
+                if (url) window.open(url, '_blank');
+            });
+            
+            socket.on('found_count', data => {
+                $('#foundCount').text(data.found);
+            });
+            
+            socket.on('search_complete', () => {
+                $('.loading-dots').hide();
+            });
+            
+            $(document).on('click', function(e) {
+                if ($(e.target).closest('.modal-content').length === 0) {
+                    $('#detailsModal').fadeOut();
+                }
+            });
+            
+            socket.emit('request_categories');
+            socket.on('categories', data => loadCategories(data.categories));
+        });
+    </script>
+</body>
+</html>
