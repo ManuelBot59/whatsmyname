@@ -206,6 +206,58 @@
             color: #666;
         }
 
+        /* --- NUEVO: Botón de Detalles y Estilos del Modal Interno --- */
+        .view-details-btn {
+            margin-top: 15px;
+            width: 100%;
+            background: #eef2f6;
+            color: #1c3961;
+            border: 1px solid #1c3961;
+            padding: 8px 15px;
+            border-radius: 6px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .view-details-btn:hover {
+            background: #1c3961;
+            color: #fff;
+        }
+
+        /* Estilos para la info dentro del modal */
+        .modal-info-item {
+            background: #f9fafb;
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            border-left: 4px solid #1c3961;
+            word-break: break-all;
+        }
+        .modal-info-label {
+            font-weight: 700;
+            color: #555;
+            font-size: 0.85rem;
+            display: block;
+            margin-bottom: 4px;
+            text-transform: uppercase;
+        }
+        .modal-info-value {
+            color: #1c3961;
+            font-size: 1rem;
+        }
+        .modal-info-image {
+            max-width: 100%;
+            border-radius: 8px;
+            margin-top: 5px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+        }
+
         /* Loading */
         .loading-dots { display: flex; justify-content: center; gap: 8px; margin-top: 15px; }
         .dot { width: 8px; height: 8px; background: #1c3961; border-radius: 50%; animation: bounce 1.4s infinite ease-in-out; }
@@ -224,10 +276,11 @@
         }
         .tool-credits a { color: #1c3961; text-decoration: none; font-weight: 600; }
 
-        /* Modal */
+        /* Modal Structure */
         .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 2000; justify-content: center; align-items: center; }
-        .modal-content { background: #fff; padding: 30px; border-radius: 12px; max-width: 600px; width: 90%; position: relative; max-height: 80vh; overflow-y: auto; }
-        .close-modal { position: absolute; top: 15px; right: 20px; font-size: 1.5rem; cursor: pointer; color: #333; }
+        .modal-content { background: #fff; padding: 30px; border-radius: 12px; max-width: 600px; width: 90%; position: relative; max-height: 80vh; overflow-y: auto; box-shadow: 0 20px 50px rgba(0,0,0,0.2); }
+        .close-modal { position: absolute; top: 15px; right: 20px; font-size: 1.8rem; cursor: pointer; color: #333; line-height: 1; transition: color 0.3s; }
+        .close-modal:hover { color: #d32f2f; }
 
         @media (max-width: 768px) {
             .search-form { flex-direction: column; }
@@ -314,8 +367,8 @@
 
     <div class="modal" id="detailsModal">
         <div class="modal-content">
-            <span class="close-modal" id="closeModal">×</span>
-            <h3 style="color: #1c3961; margin-top: 0;">Detalles Extraídos</h3>
+            <span class="close-modal" id="closeModal">&times;</span>
+            <h3 style="color: #1c3961; margin-top: 0; border-bottom: 1px solid #eee; padding-bottom: 15px;">Detalles Extraídos</h3>
             <div id="modalContent" style="margin-top: 20px;"></div>
         </div>
     </div>
@@ -329,9 +382,7 @@
             </div>
             <div class="footer-col">
                 <h3 style="border-bottom: 2px solid #0066a9; padding-bottom: 10px; margin-bottom: 20px;">Enlaces de Interés</h3>
-                
                 <p><a href="https://manuelbot59.com/formacion/" style="color: #ccc; text-decoration: none;">Cursos Gratuitos</a></p>
-                
                 <p><a href="https://manuelbot59.com/osint/" style="color: #ccc; text-decoration: none;">Directorio OSINT</a></p>
             </div>
         </div>
@@ -345,8 +396,7 @@
     <script>
         $(document).ready(function() {
             // ==========================================================
-            // CONFIGURA AQUÍ TU URL DE RENDER SI ES NECESARIO
-            // Ejemplo: const socket = io("https://tu-proyecto.onrender.com");
+            // CONFIGURA AQUÍ TU URL DE RENDER
             // ==========================================================
             const socket = io(); 
             
@@ -390,28 +440,69 @@
                 const domain = new URL(data.url).hostname;
                 const favicon = `https://www.google.com/s2/favicons?domain=${domain}&sz=64`;
                 
-                // HTML para info extraída si existe
+                // Generar HTML para la información extraída (Botón y contenido oculto)
                 let extractedInfoHTML = '';
                 if (data.extracted_info && Object.keys(data.extracted_info).length > 0) {
-                    extractedInfoHTML = `<div style="margin-top:10px; font-size:0.8rem; color:#0066a9;"><i class="fas fa-info-circle"></i> Info disponible</div>`;
+                    // Construimos la lista de datos para el modal
+                    let dataContent = '';
+                    for (const [key, value] of Object.entries(data.extracted_info)) {
+                        if (key === 'Image') {
+                            dataContent += `
+                                <div class="modal-info-item">
+                                    <span class="modal-info-label">${key}</span>
+                                    <img src="${value}" class="modal-info-image" alt="Evidence">
+                                </div>`;
+                        } else {
+                            dataContent += `
+                                <div class="modal-info-item">
+                                    <span class="modal-info-label">${key}</span>
+                                    <span class="modal-info-value">${value}</span>
+                                </div>`;
+                        }
+                    }
+
+                    // Botón visible y contenedor oculto con los datos
+                    extractedInfoHTML = `
+                        <button class="view-details-btn">
+                            <i class="fas fa-eye"></i> Ver Detalles
+                        </button>
+                        <div class="card-content" style="display: none;">
+                            ${dataContent}
+                        </div>
+                    `;
                 }
                 
                 const card = `
-                    <div class="result-card" onclick="window.open('${data.url}', '_blank')">
-                        <div class="category-badge">${data.category}</div>
-                        <div class="card-header">
-                            <img src="${favicon}" class="favicon" onerror="this.src='https://manuelbot59.com/css/favicon.ico'">
-                            <div>
-                                <div class="site-name">${data.site_name}</div>
-                                <div style="font-size:0.9rem; color:#666;">${data.username}</div>
+                    <div class="result-card">
+                        <div onclick="window.open('${data.url}', '_blank')">
+                            <div class="category-badge">${data.category}</div>
+                            <div class="card-header">
+                                <img src="${favicon}" class="favicon" onerror="this.src='https://manuelbot59.com/css/favicon.ico'">
+                                <div>
+                                    <div class="site-name">${data.site_name}</div>
+                                    <div style="font-size:0.9rem; color:#666;">${data.username}</div>
+                                </div>
                             </div>
                         </div>
+                        
                         ${extractedInfoHTML}
                     </div>
                 `;
                 
                 $('#resultsHTML').append(card);
             });
+            
+            // --- NUEVO: Lógica para abrir el Modal al hacer clic en el botón ---
+            $(document).on('click', '.view-details-btn', function(e) {
+                e.stopPropagation(); // Evita que se abra el link del sitio web
+                const content = $(this).siblings('.card-content').html(); // Obtiene el contenido oculto
+                $('#modalContent').html(content); // Lo pone en el modal
+                $('#detailsModal').fadeIn(); // Muestra el modal
+            });
+
+            // Cerrar Modal
+            $('#closeModal').click(function() { $('#detailsModal').fadeOut(); });
+            $(window).click(function(e) { if (e.target.id == 'detailsModal') $('#detailsModal').fadeOut(); });
             
             socket.on('found_count', data => {
                 $('#foundCount').text(data.found);
@@ -422,11 +513,6 @@
                 $('.progress-fill').css('width', '100%');
             });
             
-            // Modal Logic
-            $('#closeModal').click(function() { $('#detailsModal').fadeOut(); });
-            $(window).click(function(e) { if (e.target.id == 'detailsModal') $('#detailsModal').fadeOut(); });
-            
-            // Cargar categorías al inicio
             socket.emit('request_categories');
             socket.on('categories', data => loadCategories(data.categories));
         });
