@@ -2,7 +2,7 @@ import streamlit as st
 import requests
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-# --- 1. CONFIGURACIÓN DE PÁGINA (Título de Pestaña) ---
+# --- 1. CONFIGURACIÓN DE PÁGINA ---
 st.set_page_config(
     page_title="WhatsMyName Web | Herramienta SOCMINT | Manuel Travezaño",
     page_icon="🔍",
@@ -10,21 +10,21 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# --- 2. ESTILOS CSS (Adaptados a tu Marca: Azul #1c3961 y Blanco/Gris) ---
+# --- 2. ESTILOS CSS (Grid y Modal) ---
 st.markdown("""
 <style>
-    /* Ocultar elementos nativos de Streamlit */
+    /* Ocultar elementos nativos */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     header {visibility: hidden;}
 
-    /* Fondo general más limpio */
+    /* Fondo general */
     .stApp {
         background-color: #f4f7f6;
         color: #333;
     }
 
-    /* Títulos Principales */
+    /* Títulos */
     h1 {
         background: linear-gradient(45deg, #1c3961, #0066a9);
         -webkit-background-clip: text;
@@ -34,73 +34,37 @@ st.markdown("""
         text-align: center;
         padding-top: 1rem;
     }
-    
-    /* Subtítulos */
-    h3 {
+
+    /* ESTILO DE TARJETAS (Pequeños cuadrados) */
+    div[data-testid="stColumn"] > div > div > div > div.stButton > button {
+        background-color: white;
         color: #1c3961;
-        text-align: center;
-        font-weight: 600;
-        margin-bottom: 2rem;
-    }
-
-    /* Tarjetas de Resultados */
-    .result-card {
-        background-color: #ffffff;
-        padding: 20px;
-        border-radius: 12px;
-        border-left: 5px solid #27ae60; /* Tu verde corporativo */
-        margin-bottom: 15px;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.05);
-        transition: transform 0.2s;
-    }
-    .result-card:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 8px 15px rgba(0,0,0,0.1);
-    }
-    
-    /* Enlaces en las tarjetas */
-    .result-link {
-        color: #1c3961 !important;
-        text-decoration: none;
-        font-weight: bold;
-        font-size: 1.1em;
-        display: block;
-        margin-top: 5px;
-    }
-    .result-link:hover {
-        color: #27ae60 !important;
-        text-decoration: underline;
-    }
-
-    /* Badges de Categoría */
-    .category-badge {
-        background-color: #eef2f6;
-        color: #1c3961;
-        padding: 4px 10px;
-        border-radius: 20px;
-        font-size: 0.75em;
-        font-weight: bold;
-        float: right;
-        text-transform: uppercase;
-    }
-
-    /* Botón Principal (Estilo ManuelBot) */
-    .stButton > button {
-        background-color: #1c3961;
-        color: white;
-        border-radius: 8px;
-        border: none;
-        font-weight: bold;
-        padding: 0.5rem 1rem;
+        border: 1px solid #ddd;
+        border-radius: 10px;
+        height: 120px; /* Altura fija para que sean cuadrados */
         width: 100%;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+        transition: all 0.3s;
     }
-    .stButton > button:hover {
-        background-color: #0066a9;
-        color: white;
-        border: none;
+    
+    div[data-testid="stColumn"] > div > div > div > div.stButton > button:hover {
+        border-color: #00c6fb;
+        transform: translateY(-5px);
+        box-shadow: 0 10px 15px rgba(0,0,0,0.1);
+        background-color: #f0f9ff;
     }
 
-    /* Footer de Créditos */
+    /* Texto dentro de los botones/tarjetas */
+    div[data-testid="stColumn"] > div > div > div > div.stButton > button p {
+        font-size: 16px;
+        font-weight: bold;
+    }
+
+    /* Footer */
     .footer-credits {
         text-align: center;
         margin-top: 50px;
@@ -117,7 +81,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# --- LÓGICA DEL MOTOR (Requests puro para velocidad) ---
+# --- 3. LÓGICA DE BÚSQUEDA ---
 WMN_DATA_URL = "https://raw.githubusercontent.com/WebBreacher/WhatsMyName/main/wmn-data.json"
 
 @st.cache_data
@@ -127,124 +91,154 @@ def load_sites():
         data = response.json()
         return data['sites']
     except Exception as e:
-        st.error(f"Error conectando con la base de datos: {e}")
+        st.error(f"Error: {e}")
         return []
 
 def check_site(site, username):
     uri = site['uri_check'].format(account=username)
     try:
-        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'}
-        # Timeout corto para velocidad máxima
+        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
         r = requests.get(uri, headers=headers, timeout=5)
         
         if r.status_code == site['e_code']:
             if site.get('e_string') and site['e_string'] not in r.text:
                 return None
+            
+            # Intentamos obtener favicon para la imagen (ya que no hacemos scraping profundo por velocidad)
+            domain = uri.split('/')[2]
+            favicon = f"https://www.google.com/s2/favicons?domain={domain}&sz=128"
+            
             return {
                 "name": site['name'],
                 "uri": uri,
-                "category": site['cat']
+                "category": site['cat'],
+                "image": favicon
             }
     except:
         return None
     return None
 
-# --- 3. BARRA LATERAL (Simulando tu Menú Web) ---
+# --- 4. VENTANA EMERGENTE (MODAL) ---
+@st.dialog("Detalles Extraídos")
+def show_details(item):
+    # Cabecera del modal con botón a la derecha
+    col_info, col_link = st.columns([2, 1.5])
+    
+    with col_info:
+        st.caption("PLATAFORMA")
+        st.subheader(item['name'])
+        st.caption(f"Categoría: {item['category']}")
+        
+    with col_link:
+        # Botón para ir al sitio (Verde y llamativo)
+        st.markdown(f"""
+            <a href="{item['uri']}" target="_blank" style="
+                background-color: #27ae60;
+                color: white;
+                padding: 10px 20px;
+                text-decoration: none;
+                border-radius: 5px;
+                font-weight: bold;
+                display: block;
+                text-align: center;
+                margin-top: 10px;
+            ">Visitar Perfil ➜</a>
+        """, unsafe_allow_html=True)
+
+    st.markdown("---")
+    
+    # Imagen centrada al 60%
+    c1, c2, c3 = st.columns([1, 3, 1]) # Columnas para centrar (1 espacio, 3 contenido, 1 espacio)
+    with c2:
+        st.markdown("<div style='text-align: center;'>", unsafe_allow_html=True)
+        st.image(item['image'], caption="Evidencia Visual", width=200) # Width 200px es aprox 60% en modal
+        st.markdown("</div>", unsafe_allow_html=True)
+        
+    st.success("✅ El usuario ha sido detectado con éxito en esta plataforma.")
+
+# --- 5. INTERFAZ PRINCIPAL ---
+
+# Sidebar
 with st.sidebar:
-    # Tu Logo Oficial
     st.image("https://manuelbot59.com/images/FirmaManuelBot59.png", use_column_width=True)
-    
     st.markdown("### 📌 Navegación")
-    st.markdown("""
-    - [🏠 Inicio](https://manuelbot59.com/)
-    - [🎓 Cursos](https://manuelbot59.com/formacion/)
-    - [🛒 Tienda](https://manuelbot59.com/tienda/)
-    - [🕵️ OSINT](https://manuelbot59.com/osint/)
-    """)
-    
+    st.markdown("- [🏠 Inicio](https://manuelbot59.com/)")
+    st.markdown("- [🎓 Cursos](https://manuelbot59.com/formacion/)")
+    st.markdown("- [🕵️ OSINT](https://manuelbot59.com/osint/)")
     st.markdown("---")
-    st.markdown("### 📞 Contacto")
-    st.markdown("📧 **Email:** ManuelBot@proton.me")
-    st.markdown("✈️ **Telegram Soporte:** [ManuelBot59](https://t.me/ManuelBot59_Bot)")
-    
-    st.markdown("---")
-    st.info("Esta herramienta realiza una enumeración de usuarios en +500 sitios web públicos utilizando técnicas SOCMINT.")
+    st.info("Herramienta optimizada para velocidad y concurrencia.")
 
-# --- 4. INTERFAZ PRINCIPAL ---
-
-# Títulos
+# Main
 st.title("WhatsMyName Web")
 st.markdown("### Herramienta SOCMINT | Manuel Travezaño")
 
-# Carga de datos
 sites = load_sites()
 categories = sorted(list(set([s['cat'] for s in sites])))
 
-# Panel de Búsqueda
-with st.container():
-    col1, col2, col3 = st.columns([3, 1, 1])
-    with col1:
-        username = st.text_input("Usuario a investigar", placeholder="Ej: manuelbot59", label_visibility="collapsed")
-    with col2:
-        selected_category = st.selectbox("Categoría", ["Todas"] + categories, label_visibility="collapsed")
-    with col3:
-        start_btn = st.button("🔍 INVESTIGAR")
+# Buscador
+c1, c2, c3 = st.columns([3, 1, 1])
+with c1:
+    username = st.text_input("Usuario", placeholder="Ej: manuelbot59", label_visibility="collapsed")
+with c2:
+    cat_filter = st.selectbox("Cat", ["Todas"] + categories, label_visibility="collapsed")
+with c3:
+    run_btn = st.button("🔍 INVESTIGAR", use_container_width=True, type="primary")
 
-# Resultados
-if start_btn:
-    if not username:
-        st.warning("⚠️ Por favor ingresa un nombre de usuario.")
-    else:
-        # Filtro
-        target_sites = sites if selected_category == "Todas" else [s for s in sites if s['cat'] == selected_category]
+# Contenedor de resultados
+if "results_list" not in st.session_state:
+    st.session_state.results_list = []
+
+if run_btn and username:
+    st.session_state.results_list = [] # Limpiar anterior
+    target_sites = sites if cat_filter == "Todas" else [s for s in sites if s['cat'] == cat_filter]
+    
+    prog_bar = st.progress(0)
+    status = st.empty()
+    
+    # Grid Container
+    grid_container = st.container()
+    
+    processed = 0
+    
+    # Ejecución rápida
+    with ThreadPoolExecutor(max_workers=25) as executor:
+        futures = {executor.submit(check_site, s, username): s for s in target_sites}
         
-        # Barra de progreso y status
-        st.divider()
-        st.markdown(f"**🔎 Analizando huella digital para:** `{username}` en {len(target_sites)} plataformas...")
-        
-        progress_bar = st.progress(0)
-        status_text = st.empty()
-        results_container = st.container()
-        
-        found_count = 0
-        processed = 0
-        
-        # Procesamiento Paralelo Rápido (30 hilos)
-        with ThreadPoolExecutor(max_workers=30) as executor:
-            future_to_site = {executor.submit(check_site, site, username): site for site in target_sites}
+        for future in as_completed(futures):
+            res = future.result()
+            processed += 1
+            if processed % 10 == 0:
+                prog_bar.progress(processed / len(target_sites))
+                status.text(f"Analizando: {processed}/{len(target_sites)}")
             
-            for future in as_completed(future_to_site):
-                result = future.result()
-                processed += 1
-                
-                # Actualizar barra (cada 5 para no saturar UI)
-                if processed % 5 == 0 or processed == len(target_sites):
-                    progress_bar.progress(processed / len(target_sites))
-                    status_text.caption(f"Progreso: {processed}/{len(target_sites)} sitios verificados")
-                
-                if result:
-                    found_count += 1
-                    with results_container:
-                        st.markdown(f"""
-                        <div class="result-card">
-                            <span class="category-badge">{result['category']}</span>
-                            <div style="font-size: 0.9em; color: #666; margin-bottom: 5px;">Sitio detectado:</div>
-                            <div style="font-size: 1.2em; font-weight: bold; color: #333;">{result['name']}</div>
-                            <a href="{result['uri']}" target="_blank" class="result-link">
-                                🔗 Ver Perfil Detectado
-                            </a>
-                        </div>
-                        """, unsafe_allow_html=True)
+            if res:
+                st.session_state.results_list.append(res)
+    
+    prog_bar.empty()
+    status.success(f"Análisis finalizado. {len(st.session_state.results_list)} cuentas encontradas.")
 
-        progress_bar.progress(100)
-        status_text.empty()
-        
-        if found_count > 0:
-            st.success(f"✅ Análisis finalizado. Se encontraron {found_count} perfiles potenciales.")
-        else:
-            st.warning("❌ No se encontraron perfiles con este nombre de usuario.")
+# --- RENDERIZADO DE RESULTADOS (GRID) ---
+if st.session_state.results_list:
+    st.markdown("### 🎯 Resultados Encontrados")
+    
+    # Lógica de Grid (4 columnas por fila)
+    cols_per_row = 4
+    results = st.session_state.results_list
+    
+    # Iterar sobre los resultados en pasos de 4
+    for i in range(0, len(results), cols_per_row):
+        cols = st.columns(cols_per_row)
+        # Llenar cada columna de la fila actual
+        for j in range(cols_per_row):
+            if i + j < len(results):
+                item = results[i + j]
+                with cols[j]:
+                    # IMPORTANTE: El botón usa el nombre del sitio como etiqueta.
+                    # Al hacer click, se llama a show_details(item)
+                    if st.button(f"✅ {item['name']}\n\n({item['category']})", key=f"btn_{item['uri']}"):
+                        show_details(item)
 
-# --- 5. FOOTER / CRÉDITOS ---
+# Footer
 st.markdown("""
 <div class="footer-credits">
     This tool is powered by <a href="https://github.com/WebBreacher/WhatsMyName" target="_blank">WhatsMyName</a><br>
