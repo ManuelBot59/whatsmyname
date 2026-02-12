@@ -1,312 +1,360 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="es">
 <head>
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-VQP42MP5RY"></script>
+    <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', 'G-VQP42MP5RY');
+    </script>
+    
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WhatsMyName Web</title>
+    <title>WhatsMyName Web | Herramienta SOCMINT - Manuel Travezaño</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Herramienta de investigación OSINT para la enumeración de nombres de usuario en múltiples plataformas.">
+    <meta name="keywords" content="osint, socmint, whatsmyname, manuel travezaño, ciberinteligencia, username enumeration">
+    
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://manuelbot59.com/whatsmyname/">
+    <meta property="og:title" content="WhatsMyName Web | Herramienta SOCMINT">
+    <meta property="og:description" content="Investigación de usuarios en redes sociales y sitios web.">
+    <meta property="og:image" content="https://manuelbot59.com/images/share/og-principalfb.jpg">
+    
+    <link rel="canonical" href="https://manuelbot59.com/" />
+    <link rel="shortcut icon" href="https://manuelbot59.com/css/favicon.ico" type="image/x-icon" />      
+    <link rel="stylesheet" type="text/css" href="https://manuelbot59.com/css/lightbox.css">
+    <link rel="stylesheet" type="text/css" href="https://manuelbot59.com/css/owl.carousel.css">
+    <link rel="stylesheet" type="text/css" href="https://manuelbot59.com/css/owl.theme.default.css">
+    <link rel="stylesheet" type="text/css" href="https://manuelbot59.com/css/meanmenu.min.css">
+    <link rel="stylesheet" type="text/css" href="https://manuelbot59.com/css/inner-page-style.css">
+    <link rel="stylesheet" type="text/css" href="https://manuelbot59.com/css/style.css">
+    <link rel="stylesheet" type="text/css" href="https://manuelbot59.com/css/portada.css">
+    <link rel="stylesheet" type="text/css" href="https://manuelbot59.com/css/tienda.css">
+    <link rel="stylesheet" type="text/css" href="https://manuelbot59.com/css/patreon.css">
+    <link rel="stylesheet" type="text/css" href="https://manuelbot59.com/css/whatsapp.css">
+    <link rel="stylesheet" href="https://manuelbot59.com/css/modal.css">
+    
+    <link href="https://fonts.googleapis.com/css?family=Raleway:400,500,600,700" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    
+    <script type="text/javascript" src="https://manuelbot59.com/js/jquery-3.3.1.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.0/socket.io.js"></script>
+
     <style>
-        :root {
-            --primary: #7c3aed;
-            --secondary: #00ff88;
-            --background: #0f172a;
-            --glass: rgba(255, 255, 255, 0.05);
+        /* Ajustes básicos para mantener la coherencia */
+        body { margin: 0; font-family: 'Raleway', sans-serif; background-color: #f4f7f6; }
+        
+        /* HEADER STYLES (Copiados para asegurar visualización correcta sin depender del CSS externo para estructura crítica) */
+        .main-header .container { display: flex; justify-content: space-between; align-items: center; padding: 3px; max-width: 1200px; margin: 0 auto; }
+        .logo-wrap img { max-width: 100%; height: auto; }
+        .desktop-menu { display: flex; align-items: center; margin-left: 40px; }
+        .main-menu { display: flex; gap: 35px; list-style: none; margin: 0; padding: 0; }
+        .main-menu a { color: #3a3a3a; text-decoration: none; font-weight: 600; font-size: 1.8rem; }
+        .top-header { background-color: #1c3961; color: white; padding: 10px 0; }
+        .top-header a { color: white; text-decoration: none; margin-right: 15px; }
+        
+        /* === ESTILOS DE LA HERRAMIENTA WMN (Adaptados a Tema Claro/Profesional) === */
+        .wmn-wrapper {
+            padding: 60px 0;
+            min-height: 80vh;
         }
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-            font-family: 'Inter', sans-serif;
-        }
-        body {
-            background: linear-gradient(45deg, #0f172a, #1e293b);
-            color: #fff;
-            min-height: 100vh;
-            padding: 2rem;
-        }
-        .container { max-width: 1200px; margin: 0 auto; }
-        .header { text-align: center; margin-bottom: 3rem; position: relative; }
-        .logo {
-            width: 100px;
-            filter: drop-shadow(0 0 10px rgba(124, 58, 237, 0.5));
-            margin-bottom: 1rem;
-            animation: float 3s ease-in-out infinite;
-        }
-        .title {
-            font-size: 2.5rem;
-            background: linear-gradient(to right, var(--primary), var(--secondary));
+        
+        .wmn-title {
+            text-align: center;
+            font-size: 3rem;
+            margin-bottom: 10px;
+            background: linear-gradient(45deg, #1c3961, #0066a9);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
-            margin-bottom: 0.5rem;
+            font-weight: 700;
         }
-        .search-box {
-            background: var(--glass);
-            backdrop-filter: blur(12px);
-            border-radius: 20px;
-            padding: 2rem;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            margin-bottom: 2rem;
+        
+        .wmn-subtitle {
+            text-align: center;
+            color: #666;
+            margin-bottom: 40px;
+            font-size: 1.2rem;
         }
-        .form-group { margin-bottom: 1.5rem; }
+
+        /* Caja de Búsqueda */
+        .search-box-container {
+            background: #fff;
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+            border-top: 5px solid #1c3961;
+            max-width: 800px;
+            margin: 0 auto 30px auto;
+        }
+
+        .search-form {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+
         .input-field {
-            width: 100%;
-            padding: 1rem;
-            background: rgba(255, 255, 255, 0.05);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: 10px;
-            color: #fff;
+            flex: 1;
+            padding: 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
             font-size: 1rem;
-            transition: all 0.3s ease;
-            -webkit-appearance: none;
-            appearance: none;
+            font-family: 'Inter', sans-serif;
+            transition: border-color 0.3s;
+            min-width: 200px;
         }
-        .input-field option {
-            background-color: #1e293b;
-            color: #fff;
-            padding: 10px;
-        }
+
         .input-field:focus {
             outline: none;
-            border-color: var(--primary);
-            box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.3);
+            border-color: #1c3961;
         }
-        select.input-field {
-            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
-            background-repeat: no-repeat;
-            background-position: right 1rem center;
-            background-size: 1em;
-            padding-right: 2.5rem;
-        }
+
         .search-btn {
-            background: linear-gradient(45deg, var(--primary), var(--secondary));
-            border: none;
-            padding: 1rem 2rem;
-            border-radius: 10px;
+            background: #1c3961;
             color: #fff;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 8px;
             font-weight: 600;
             cursor: pointer;
-            transition: transform 0.3s ease;
-            width: 100%;
+            transition: background 0.3s, transform 0.2s;
             text-transform: uppercase;
             letter-spacing: 1px;
         }
+
         .search-btn:hover {
+            background: #0066a9;
             transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(124, 58, 237, 0.4);
         }
+
+        /* Barra de Progreso */
         .progress-container {
-            background: var(--glass);
-            border-radius: 15px;
-            padding: 1.5rem;
-            margin: 2rem 0;
-            backdrop-filter: blur(5px);
+            max-width: 800px;
+            margin: 0 auto 30px auto;
+            background: #fff;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.05);
         }
+
         .progress-text {
             display: flex;
             justify-content: space-between;
-            margin-bottom: 1rem;
-            color: #94a3b8;
+            margin-bottom: 10px;
+            color: #1c3961;
+            font-weight: 600;
         }
-        .progress-bar {
-            height: 8px;
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 4px;
+
+        .progress-bar-bg {
+            height: 10px;
+            background: #e0e0e0;
+            border-radius: 5px;
             overflow: hidden;
         }
+
         .progress-fill {
             height: 100%;
-            background: linear-gradient(90deg, var(--primary), var(--secondary));
+            background: linear-gradient(90deg, #1c3961, #0066a9);
+            width: 0%;
             transition: width 0.3s ease;
         }
+
+        /* Resultados */
         .results-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-            gap: 1.5rem;
-            margin-top: 2rem;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 20px;
+            margin-top: 30px;
         }
+
         .result-card {
-            background: var(--glass);
-            border-radius: 15px;
-            padding: 1.5rem;
-            backdrop-filter: blur(5px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            transition: all 0.3s ease;
+            background: #fff;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            border: 1px solid #f0f0f0;
+            transition: transform 0.2s, box-shadow 0.2s;
             cursor: pointer;
             position: relative;
             overflow: hidden;
         }
-        .result-card.expanded {
-            grid-column: 1 / -1;
-            transform: none !important;
+
+        .result-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 30px rgba(0,0,0,0.1);
+            border-color: #0066a9;
         }
-        .card-content {
-            margin-top: 1rem;
-            border-top: 1px solid rgba(255, 255, 255, 0.1);
-            padding-top: 1rem;
-        }
-        .extracted-info {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-            gap: 1rem;
-            margin-top: 1rem;
-        }
-        .info-item {
-            background: rgba(255, 255, 255, 0.05);
-            padding: 0.75rem;
-            border-radius: 8px;
-            word-break: break-word;
-        }
-        .info-label {
-            font-size: 0.8rem;
-            color: var(--secondary);
-            margin-bottom: 0.25rem;
-            font-weight: 500;
-        }
-        .info-value {
-            font-size: 0.9rem;
-            color: #fff;
-        }
-        .no-info {
-            color: #94a3b8;
-            font-style: italic;
-            text-align: center;
-            padding: 1rem;
-        }
-        @keyframes float {
-            0%, 100% { transform: translateY(0); }
-            50% { transform: translateY(-10px); }
-        }
-        .loading-dots {
+
+        .card-header {
             display: flex;
-            justify-content: center;
-            gap: 0.5rem;
-            margin-top: 1rem;
+            align-items: center;
+            gap: 15px;
         }
-        .dot {
-            width: 8px;
-            height: 8px;
-            background: var(--secondary);
-            border-radius: 50%;
-            animation: bounce 1.4s infinite ease-in-out;
+
+        .favicon {
+            width: 32px;
+            height: 32px;
+            border-radius: 4px;
         }
+
+        .site-name {
+            font-weight: 700;
+            color: #1c3961;
+            font-size: 1.1rem;
+        }
+
+        .category-badge {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            font-size: 0.75rem;
+            background: #f0f2f5;
+            padding: 4px 8px;
+            border-radius: 4px;
+            color: #666;
+        }
+
+        /* Loading */
+        .loading-dots { display: flex; justify-content: center; gap: 8px; margin-top: 15px; }
+        .dot { width: 8px; height: 8px; background: #1c3961; border-radius: 50%; animation: bounce 1.4s infinite ease-in-out; }
         .dot:nth-child(2) { animation-delay: 0.2s; }
         .dot:nth-child(3) { animation-delay: 0.4s; }
-        @keyframes bounce {
-            0%, 80%, 100% { transform: translateY(0); }
-            40% { transform: translateY(-10px); }
+        @keyframes bounce { 0%, 80%, 100% { transform: translateY(0); } 40% { transform: translateY(-10px); } }
+
+        /* Créditos */
+        .tool-credits {
+            text-align: center;
+            margin-top: 40px;
+            font-size: 0.9rem;
+            color: #888;
+            padding: 20px;
+            border-top: 1px solid #e0e0e0;
         }
-        .favicon {
-            width: 48px;
-            height: 48px;
-        }
-        .info-image {
-            max-width: 100%;
-            height: auto;
-            border-radius: 8px;
-        }
-        .modal {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.8);
-            justify-content: center;
-            align-items: center;
-            z-index: 1000;
-        }
-        .modal-content {
-            background: var(--glass);
-            border-radius: 15px;
-            padding: 2rem;
-            max-width: 600px;
-            width: 90%;
-            backdrop-filter: blur(12px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            position: relative;
-            transform: translate(-50%, -50%);
-            top: 50%;
-            left: 50%;
-            max-height: 80vh;
-            overflow-y: auto;
-        }
-        .close-modal {
-            position: absolute;
-            top: 1rem;
-            right: 1rem;
-            cursor: pointer;
-            font-size: 1.5rem;
-            color: #fff;
-        }
-        .view-details-btn {
-            background: linear-gradient(45deg, var(--primary), var(--secondary));
-            border: none;
-            padding: 0.5rem 1rem;
-            border-radius: 8px;
-            color: #fff;
-            font-weight: 600;
-            cursor: pointer;
-            transition: transform 0.3s ease;
-            margin-top: 1rem;
-        }
-        .view-details-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(124, 58, 237, 0.4);
+        .tool-credits a { color: #1c3961; text-decoration: none; font-weight: 600; }
+
+        /* Modal */
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 2000; justify-content: center; align-items: center; }
+        .modal-content { background: #fff; padding: 30px; border-radius: 12px; max-width: 600px; width: 90%; position: relative; max-height: 80vh; overflow-y: auto; }
+        .close-modal { position: absolute; top: 15px; right: 20px; font-size: 1.5rem; cursor: pointer; color: #333; }
+
+        @media (max-width: 768px) {
+            .search-form { flex-direction: column; }
+            .desktop-menu { display: none; }
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <header class="header">
-            <img src="https://github.com/WebBreacher/WhatsMyName/blob/main/whatsmyname.png?raw=true" class="logo" alt="Logo">
-            <h1 class="title">WhatsMyName Web</h1>
+
+    <div id="page" class="site">
+        <header class="site-header">
+            <div class="top-header">
+                <div class="container">
+                    <div class="top-header-left">
+                        <a href="mailto:ManuelBot@proton.me"><i class="fas fa-envelope"></i> ManuelBot@proton.me</a>
+                        <a href="https://t.me/ManuelBot59_Bot" target="_blank"><i class="fas fa-terminal"></i> Manuel Travezaño</a>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="main-header">
+                <div class="container">
+                    <div class="logo-wrap">
+                        <a href="https://manuelbot59.com/">
+                            <img src="https://manuelbot59.com/images/FirmaManuelBot59.png" width="250" height="70" alt="Logo">
+                        </a>
+                    </div>
+                    
+                    <nav class="desktop-menu">
+                        <ul class="main-menu">
+                            <li><a href="https://manuelbot59.com/">Inicio</a></li>
+                            <li><a href="https://manuelbot59.com/formacion/">Cursos</a></li>
+                            <li><a href="https://manuelbot59.com/tienda/">Tienda</a></li>
+                            <li><a href="https://manuelbot59.com/osint/">OSINT</a></li>
+                        </ul>
+                    </nav>
+                    
+                    <div class="hamburger-btn" style="display:none;"><i class="fas fa-bars"></i></div>
+                </div>
+            </div>
         </header>
-        <div class="search-box">
-            <form id="searchForm">
-                <div class="form-group">
-                    <input type="text" class="input-field" id="username" placeholder="Enter username" required>
-                </div>
-                <div class="form-group">
-                    <select class="input-field" id="category">
-                        <option value="">All Categories</option>
-                    </select>
-                </div>
-                <button type="submit" class="search-btn">Search</button>
+    </div>
+
+    <main class="container wmn-wrapper">
+        
+        <h1 class="wmn-title">WhatsMyName Web</h1>
+        <p class="wmn-subtitle">Buscador avanzado de nombres de usuario en +500 sitios web</p>
+
+        <div class="search-box-container">
+            <form id="searchForm" class="search-form">
+                <input type="text" class="input-field" id="username" placeholder="Ingresa nombre de usuario (ej: manuelbot59)" required>
+                <select class="input-field" id="category" style="max-width: 200px;">
+                    <option value="">Todas las categorías</option>
+                </select>
+                <button type="submit" class="search-btn">
+                    <i class="fas fa-search"></i> Investigar
+                </button>
             </form>
         </div>
+
         <div class="progress-container" id="progress" style="display: none;">
             <div class="progress-text">
-                <span>Found: <span id="foundCount">0</span></span>
-                <span>Processed: <span id="processedCount">0</span>/<span id="totalCount">0</span></span>
+                <span><i class="fas fa-check-circle" style="color: #27ae60;"></i> Encontrados: <span id="foundCount">0</span></span>
+                <span>Procesando: <span id="processedCount">0</span> / <span id="totalCount">0</span></span>
             </div>
-            <div class="progress-bar">
+            <div class="progress-bar-bg">
                 <div class="progress-fill" style="width: 0%"></div>
             </div>
             <div class="loading-dots">
-                <div class="dot"></div>
-                <div class="dot"></div>
-                <div class="dot"></div>
+                <div class="dot"></div><div class="dot"></div><div class="dot"></div>
             </div>
         </div>
+
         <div class="results-grid" id="resultsHTML"></div>
-    </div>
+
+        <div class="tool-credits">
+            This tool is powered by <a href="https://github.com/WebBreacher/WhatsMyName" target="_blank">WhatsMyName</a>
+        </div>
+
+    </main>
+
     <div class="modal" id="detailsModal">
         <div class="modal-content">
-            <span class="close-modal" id="closeModal">&times;</span>
-            <div id="modalContent"></div>
+            <span class="close-modal" id="closeModal">×</span>
+            <h3 style="color: #1c3961; margin-top: 0;">Detalles Extraídos</h3>
+            <div id="modalContent" style="margin-top: 20px;"></div>
         </div>
     </div>
+
+    <footer class="page-footer" style="background: #1c3961; color: white; padding: 40px 0;">
+        <div class="container" style="display: flex; justify-content: space-between; flex-wrap: wrap; gap: 30px;">
+            <div class="footer-col">
+                <h3 style="border-bottom: 2px solid #0066a9; padding-bottom: 10px; margin-bottom: 20px;">Contáctanos</h3>
+                <p><a href="mailto:ManuelBot@proton.me" style="color: #ccc; text-decoration: none;"><i class="fas fa-envelope"></i> ManuelBot@proton.me</a></p>
+                <p><a href="https://t.me/ManuelBot59_Bot" style="color: #ccc; text-decoration: none;"><i class="fas fa-terminal"></i> ManuelBot59</a></p>
+            </div>
+            <div class="footer-col">
+                <h3 style="border-bottom: 2px solid #0066a9; padding-bottom: 10px; margin-bottom: 20px;">Enlaces de Interés</h3>
+                <p><a href="https://linktr.ee/proyectosmanuelbot" style="color: #ccc; text-decoration: none;">Cursos Gratuitos</a></p>
+                <p><a href="https://manuelbot59.com/osint/" style="color: #ccc; text-decoration: none;">Directorio OSINT</a></p>
+            </div>
+        </div>
+        <div style="text-align: center; margin-top: 40px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 20px; color: #aaa; font-size: 0.9rem;">
+            Copyright © Manuel Travezaño OSINT. Todos los derechos reservados.
+        </div>
+    </footer>
+
+    <script type="text/javascript" src="https://manuelbot59.com/js/custom.js"></script>
+
     <script>
         $(document).ready(function() {
-            const socket = io();
+            // Conexión Socket (Asegúrate de que esta lógica coincida con tu backend en Render)
+            const socket = io(); 
             
             function loadCategories(categories) {
                 const categorySelect = $('#category');
-                categorySelect.empty().append(new Option("All Categories", ""));
+                categorySelect.empty().append(new Option("Todas las categorías", ""));
                 categories.forEach(cat => categorySelect.append(new Option(cat, cat)));
             }
             
@@ -316,7 +364,7 @@
             }
             
             function resetSearch() {
-                $('#progress').show();
+                $('#progress').slideDown();
                 $('#resultsHTML').empty();
                 $('.progress-fill').css('width', '0%');
                 $('.loading-dots').show();
@@ -329,6 +377,7 @@
                 e.preventDefault();
                 const username = $('#username').val();
                 const category = $('#category').val();
+                if(!username) return;
                 resetSearch();
                 socket.emit('start_search', { username, category });
             });
@@ -343,59 +392,27 @@
                 const domain = new URL(data.url).hostname;
                 const favicon = `https://www.google.com/s2/favicons?domain=${domain}&sz=64`;
                 
+                // HTML para info extraída si existe
                 let extractedInfoHTML = '';
                 if (data.extracted_info && Object.keys(data.extracted_info).length > 0) {
-                    extractedInfoHTML = `
-                        <div class="extracted-info">
-                            ${Object.entries(data.extracted_info).map(([key, value]) => `
-                                <div class="info-item">
-                                    <div class="info-label">${key}</div>
-                                    ${key === 'Image' ? `<img src="${value}" class="info-image" alt="Image">` : `<div class="info-value">${value}</div>`}
-                                </div>
-                            `).join('')}
-                        </div>
-                    `;
+                    extractedInfoHTML = `<div style="margin-top:10px; font-size:0.8rem; color:#0066a9;"><i class="fas fa-info-circle"></i> Info disponible</div>`;
                 }
                 
                 const card = `
-                    <div class="result-card">
-                        <div class="card-header" data-url="${data.url}">
-                            <img src="${favicon}" class="favicon" alt="Favicon">
+                    <div class="result-card" onclick="window.open('${data.url}', '_blank')">
+                        <div class="category-badge">${data.category}</div>
+                        <div class="card-header">
+                            <img src="${favicon}" class="favicon" onerror="this.src='https://manuelbot59.com/css/favicon.ico'">
                             <div>
-                                <div class="site-name">Site Name: ${data.site_name}</div>
-                                <div class="username">Username: ${data.username}</div>
-                                <div class="category">Category: ${data.category}</div>
+                                <div class="site-name">${data.site_name}</div>
+                                <div style="font-size:0.9rem; color:#666;">${data.username}</div>
                             </div>
                         </div>
-                        ${extractedInfoHTML ? `
-                            <button class="view-details-btn">View Details</button>
-                            <div class="card-content" style="display: none;">
-                                <div class="extracted-info-container">
-                                    <h3>Extracted Information</h3>
-                                    ${extractedInfoHTML}
-                                </div>
-                            </div>
-                        ` : ''}
+                        ${extractedInfoHTML}
                     </div>
                 `;
                 
                 $('#resultsHTML').append(card);
-            });
-            
-            $(document).on('click', '.view-details-btn', function(e) {
-                e.stopPropagation();
-                const content = $(this).siblings('.card-content').html();
-                $('#modalContent').html(content);
-                $('#detailsModal').fadeIn();
-            });
-            
-            $('#closeModal').click(function() {
-                $('#detailsModal').fadeOut();
-            });
-            
-            $(document).on('click', '.result-card', function(e) {
-                const url = $(this).find('.card-header').data('url');
-                if (url) window.open(url, '_blank');
             });
             
             socket.on('found_count', data => {
@@ -404,14 +421,14 @@
             
             socket.on('search_complete', () => {
                 $('.loading-dots').hide();
+                $('.progress-fill').css('width', '100%');
             });
             
-            $(document).on('click', function(e) {
-                if ($(e.target).closest('.modal-content').length === 0) {
-                    $('#detailsModal').fadeOut();
-                }
-            });
+            // Modal Logic
+            $('#closeModal').click(function() { $('#detailsModal').fadeOut(); });
+            $(window).click(function(e) { if (e.target.id == 'detailsModal') $('#detailsModal').fadeOut(); });
             
+            // Cargar categorías al inicio
             socket.emit('request_categories');
             socket.on('categories', data => loadCategories(data.categories));
         });
