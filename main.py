@@ -8,7 +8,8 @@ from bs4 import BeautifulSoup
 import dns.resolver
 from email_validator import validate_email, EmailNotValidError
 import urllib.parse
-from datetime import datetime # <--- NUEVO: Para la marca de tiempo
+from datetime import datetime
+import time
 
 # Importamos socid-extractor
 try:
@@ -151,7 +152,6 @@ def check_site(site, username):
     image_url = None
     site_name = site['name'].lower()
     
-    # Enrutamiento de extractores
     if "telegram" in site_name: details, image_url = extract_telegram(username)
     elif "github" in site_name: details, image_url = extract_github(username)
     elif "gravatar" in site_name: details, image_url = extract_gravatar(username)
@@ -210,7 +210,7 @@ def analyze_email(email):
 
     return results
 
-# --- 6. GENERADORES DE ARCHIVOS (CON TIMESTAMP) ---
+# --- 6. GENERADORES DE ARCHIVOS (AJUSTE FINAL DE FECHA) ---
 WMN_DATA_URL = "https://raw.githubusercontent.com/WebBreacher/WhatsMyName/main/wmn-data.json"
 APP_URL = "https://whatsmyname.streamlit.app/"
 
@@ -235,21 +235,21 @@ class PDFReport(FPDF):
         self.cell(0, 5, f'Pagina {self.page_no()}', 0, 0, 'C')
 
 def generate_files(results, target):
-    # Generar Marcas de Tiempo
-    now = datetime.now()
-    timestamp_display = now.strftime("%d/%m/%Y %H:%M:%S")
+    # Generar Fecha con Zona Horaria Local del Sistema (GMT/UTC offset)
+    now = datetime.now().astimezone() 
+    timestamp_display = now.strftime("%d/%m/%Y %H:%M:%S (GMT%z)") # Formato Local + Zona
     timestamp_filename = now.strftime("%Y%m%d_%H%M%S")
 
     # 1. CSV
     df = pd.DataFrame(results)
-    # Añadir fecha de extracción al CSV
+    # Añadimos la fecha a cada fila para registro
     df['fecha_extraccion'] = timestamp_display
     csv = df.drop(columns=['details', 'image'], errors='ignore').to_csv(index=False).encode('utf-8')
     
     # 2. TXT
     txt = io.StringIO()
     txt.write(f"REPORTE DE INVESTIGACION - USUARIO: {target}\n")
-    txt.write(f"Fecha de Extraccion: {timestamp_display}\n") # Timestamp
+    txt.write(f"Fecha de Extraccion: {timestamp_display}\n") # Fecha Local
     txt.write(f"Herramienta: {APP_URL}\n")
     txt.write("="*60 + "\n\n")
     for item in results:
@@ -268,7 +268,7 @@ def generate_files(results, target):
         pdf.set_font("Arial", size=10)
         
         pdf.cell(0, 10, clean_text(f"Objetivo: {target}"), ln=1)
-        pdf.cell(0, 10, clean_text(f"Fecha: {timestamp_display}"), ln=1) # Timestamp
+        pdf.cell(0, 10, clean_text(f"Fecha: {timestamp_display}"), ln=1) # Fecha Local
         pdf.cell(0, 10, f"Total Hallazgos: {len(results)}", ln=1)
         pdf.ln(10)
         
@@ -370,6 +370,7 @@ with tab1:
                                         st.markdown(f"<div class='site-title'>{item['name']}</div>", unsafe_allow_html=True)
                                         st.markdown(f"<span class='site-cat'>{item['category']}</span>", unsafe_allow_html=True)
                                         st.link_button("🔗 Visitar", item['uri'], use_container_width=True)
+                                        # ¡CORREGIDO: ELIMINADO EL TEXTO URL REDUNDANTE!
                                     
                                     if item.get('details'):
                                         with st.expander("👁️ Ver Detalles Extraídos"):
@@ -379,15 +380,13 @@ with tab1:
                                             with dc2:
                                                 for k, v in item['details'].items():
                                                     st.markdown(f"**{k}:** {v}")
-                                    else:
-                                        st.caption(f"URL: {item['uri']}")
         
         prog_bar.progress(100)
     
     if st.session_state.results:
         st.divider()
         st.subheader("📥 Exportar Reporte")
-        # Generamos archivos y timestamp
+        # Obtenemos contenido y nombre de archivo con TIMESTAMP
         csv, txt, pdf, ts_filename = generate_files(st.session_state.results, username)
         
         d1, d2, d3 = st.columns(3)
@@ -399,7 +398,7 @@ with tab1:
             if pdf: 
                 st.download_button("📕 Descargar PDF", pdf, f"{username}_{ts_filename}.pdf", "application/pdf", use_container_width=True)
             else: 
-                st.warning("PDF no disponible (Error de formato)")
+                st.warning("PDF no disponible")
 
 # TAB 2: CORREOS
 with tab2:
