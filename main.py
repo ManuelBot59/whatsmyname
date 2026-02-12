@@ -10,7 +10,7 @@ import re
 from email_validator import validate_email, EmailNotValidError
 import urllib.parse
 
-# Importamos socid-extractor como respaldo
+# Importamos socid-extractor de forma segura
 try:
     from socid_extractor import extract as socid_extract
 except ImportError:
@@ -48,7 +48,7 @@ st.markdown("""
         padding-top: 1rem;
     }
 
-    /* Tarjetas de Resultados */
+    /* Tarjetas */
     div[data-testid="stVerticalBlockBorderWrapper"] {
         background-color: white;
         border-radius: 8px;
@@ -68,7 +68,7 @@ st.markdown("""
     .site-title { font-size: 1.1rem; font-weight: 700; color: #1c3961; }
     .site-cat { font-size: 0.8rem; color: #64748b; background-color: #f1f5f9; padding: 2px 8px; border-radius: 12px; }
 
-    /* Footer */
+    /* Footer Nuevo */
     .footer-credits {
         text-align: center; margin-top: 50px; padding: 20px;
         border-top: 1px solid #ddd; font-size: 0.85em; color: #666;
@@ -77,15 +77,13 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# --- 4. MOTORES DE EXTRACCIÓN ESPECÍFICOS (RECUPERADOS) ---
+# --- 4. MOTORES DE EXTRACCIÓN ---
 def get_headers():
     return {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'}
 
-# Extractor Telegram
 def extract_telegram(username):
-    url = f"https://t.me/{username}"
     try:
-        r = requests.get(url, headers=get_headers(), timeout=5)
+        r = requests.get(f"https://t.me/{username}", headers=get_headers(), timeout=5)
         soup = BeautifulSoup(r.text, 'html.parser')
         image = soup.find("meta", property="og:image")
         title = soup.find("meta", property="og:title")
@@ -95,52 +93,38 @@ def extract_telegram(username):
         img_url = None
         if title:
             name_raw = title.get("content", "").replace("Telegram: Contact @", "")
-            details["Nombre Visible"] = name_raw.split(" - ")[0] if " - " in name_raw else name_raw
-        if desc:
-            details["Biografía"] = desc.get("content", "")
-        if image:
-            img_url = image.get("content")
+            details["Nombre Visible"] = name_raw.split(" - ")[0]
+        if desc: details["Biografía"] = desc.get("content", "")
+        if image: img_url = image.get("content")
         return details, img_url
     except:
         return {}, None
 
-# Extractor GitHub
 def extract_github(username):
     try:
         r = requests.get(f"https://api.github.com/users/{username}", headers=get_headers(), timeout=5)
         if r.status_code == 200:
             data = r.json()
             details = {
-                "Nombre": data.get("name"),
-                "Bio": data.get("bio"),
-                "Ubicación": data.get("location"),
-                "Twitter": data.get("twitter_username"),
-                "Repos": data.get("public_repos"),
-                "Seguidores": data.get("followers")
+                "Nombre": data.get("name"), "Bio": data.get("bio"),
+                "Ubicación": data.get("location"), "Twitter": data.get("twitter_username"),
+                "Repos": data.get("public_repos")
             }
-            # Filtramos nulos
             return {k: v for k, v in details.items() if v}, data.get("avatar_url")
     except:
         pass
     return {}, None
 
-# Extractor Gravatar
 def extract_gravatar(username):
     try:
         r = requests.get(f"https://en.gravatar.com/{username}.json", headers=get_headers(), timeout=5)
         if r.status_code == 200:
             data = r.json()['entry'][0]
-            details = {
-                "Nombre": data.get("displayName"),
-                "Ubicación": data.get("currentLocation"),
-                "Bio": data.get("aboutMe")
-            }
-            return {k: v for k, v in details.items() if v}, data.get("thumbnailUrl")
+            return {"Nombre": data.get("displayName"), "Ubicación": data.get("currentLocation")}, data.get("thumbnailUrl")
     except:
         pass
     return {}, None
 
-# Extractor Genérico
 def extract_generic_meta(url):
     try:
         r = requests.get(url, headers=get_headers(), timeout=5)
@@ -154,11 +138,8 @@ def extract_generic_meta(url):
     except:
         return {}, None
 
-# --- 5. LÓGICA DE VALIDACIÓN (CON SOCID INTEGRADO) ---
 def check_site(site, username):
     uri = site['uri_check'].format(account=username)
-    
-    # 1. Validación Rápida
     try:
         r = requests.get(uri, headers=get_headers(), timeout=6)
         if r.status_code != site['e_code']: return None
@@ -166,20 +147,14 @@ def check_site(site, username):
     except:
         return None
 
-    # 2. Extracción Profunda (Restaurada)
     details = {}
     image_url = None
     site_name = site['name'].lower()
     
-    # Enrutamiento inteligente de extractores
-    if "telegram" in site_name:
-        details, image_url = extract_telegram(username)
-    elif "github" in site_name:
-        details, image_url = extract_github(username)
-    elif "gravatar" in site_name:
-        details, image_url = extract_gravatar(username)
+    if "telegram" in site_name: details, image_url = extract_telegram(username)
+    elif "github" in site_name: details, image_url = extract_github(username)
+    elif "gravatar" in site_name: details, image_url = extract_gravatar(username)
     else:
-        # Genérico + Socid
         details, image_url = extract_generic_meta(uri)
         if not details and socid_extract:
             try:
@@ -187,111 +162,119 @@ def check_site(site, username):
                 if data:
                     details = {k: v for k, v in data.items() if v and k != 'image'}
                     image_url = data.get('image')
-            except:
-                pass
+            except: pass
 
-    # Fallback de imagen
     if not image_url:
         try:
             domain = uri.split('/')[2]
             image_url = f"https://www.google.com/s2/favicons?domain={domain}&sz=128"
-        except:
-            image_url = "https://via.placeholder.com/128?text=Found"
+        except: image_url = "https://via.placeholder.com/128?text=Found"
 
-    return {
-        "name": site['name'],
-        "uri": uri,
-        "category": site['cat'],
-        "image": image_url,
-        "details": details
-    }
+    return {"name": site['name'], "uri": uri, "category": site['cat'], "image": image_url, "details": details}
 
-# --- 6. MÓDULO DE CORREO ---
+# --- 5. MÓDULO DE CORREO ---
 def analyze_email(email):
     results = {}
     try:
         v = validate_email(email)
         email = v["email"]
         results['valid_format'] = True
-    except EmailNotValidError as e:
-        return {'valid_format': False, 'error': str(e)}
+    except EmailNotValidError as e: return {'valid_format': False, 'error': str(e)}
 
     domain = email.split('@')[1]
     username_part = email.split('@')[0]
-    results['domain'] = domain
-    results['username_part'] = username_part
+    results['domain'], results['username_part'] = domain, username_part
 
     try:
-        mx_records = dns.resolver.resolve(domain, 'MX')
+        mx = dns.resolver.resolve(domain, 'MX')
         results['has_mail_server'] = True
-    except:
-        results['has_mail_server'] = False
+    except: results['has_mail_server'] = False
 
-    # Gravatar Check
     import hashlib
     email_hash = hashlib.md5(email.lower().encode('utf-8')).hexdigest()
-    gravatar_url = f"https://en.gravatar.com/{email_hash}.json"
-    
     try:
-        r = requests.get(gravatar_url, headers=get_headers(), timeout=5)
+        r = requests.get(f"https://en.gravatar.com/{email_hash}.json", headers=get_headers(), timeout=5)
         if r.status_code == 200:
             data = r.json()['entry'][0]
-            results['gravatar'] = {
-                'found': True, 'profile': data.get('profileUrl'),
-                'image': data.get('thumbnailUrl'), 'name': data.get('displayName'),
-                'location': data.get('currentLocation')
-            }
-        else:
-            results['gravatar'] = {'found': False}
-    except:
-        results['gravatar'] = {'found': False}
+            results['gravatar'] = {'found': True, 'profile': data.get('profileUrl'), 'image': data.get('thumbnailUrl'), 'name': data.get('displayName'), 'location': data.get('currentLocation')}
+        else: results['gravatar'] = {'found': False}
+    except: results['gravatar'] = {'found': False}
+
+    # Duolingo Check
+    try:
+        r = requests.get(f"https://www.duolingo.com/2017-06-30/users?email={email}", headers=get_headers(), timeout=5)
+        if r.status_code == 200 and r.json()['users']:
+            user = r.json()['users'][0]
+            results['duolingo'] = {"image": user.get("picture") + "/xxlarge" if user.get("picture") else None, "username": user.get("username"), "learning": [c['title'] for c in user.get("courses", [])]}
+    except: pass
 
     return results
 
-# --- 7. AUXILIARES ---
+# --- 6. GENERADORES DE ARCHIVOS (CORREGIDO) ---
 def clean_text(text):
     if not isinstance(text, str): return str(text)
     return text.encode('latin-1', 'replace').decode('latin-1')
 
 def generate_files(results, target):
+    # 1. CSV
     df = pd.DataFrame(results)
     csv = df.drop(columns=['details', 'image'], errors='ignore').to_csv(index=False).encode('utf-8')
+    
+    # 2. TXT
+    txt = io.StringIO()
+    txt.write(f"REPORTE DE INVESTIGACION - USUARIO: {target}\n")
+    txt.write(f"Herramienta: {APP_URL}\n")
+    txt.write("="*60 + "\n\n")
+    for item in results:
+        txt.write(f"Plataforma: {item['name']}\nURL: {item['uri']}\n")
+        if item.get('details'):
+            for k, v in item['details'].items(): txt.write(f"  - {k}: {v}\n")
+        txt.write("-" * 20 + "\n")
+    
+    # 3. PDF (Simplificado para evitar errores)
+    pdf_bytes = None
     try:
         pdf = FPDF()
         pdf.add_page()
         pdf.set_font("Arial", size=10)
         pdf.cell(0, 10, clean_text(f"Reporte: {target}"), ln=1)
         pdf.ln(5)
+        
+        pdf.set_font("Arial", 'B', 10)
+        pdf.cell(60, 10, clean_text("Plataforma"), 1)
+        pdf.cell(130, 10, clean_text("Enlace"), 1)
+        pdf.ln()
+        
+        pdf.set_font("Arial", size=9)
         for item in results:
-            pdf.cell(0, 10, clean_text(f"{item['name']} - {item['uri']}"), ln=1)
+            pdf.cell(60, 10, clean_text(item['name'][:30]), 1)
+            # Enlace clickeable
+            pdf.set_text_color(0, 0, 255)
+            pdf.cell(130, 10, clean_text("Enlace al perfil"), 1, 0, link=item['uri'])
+            pdf.set_text_color(0, 0, 0)
+            pdf.ln()
+            
         pdf_bytes = pdf.output(dest='S').encode('latin-1', 'ignore')
-    except:
-        pdf_bytes = None
-    return csv, pdf_bytes
+    except Exception as e:
+        print(f"PDF Error: {e}") # Log interno
+        
+    return csv, txt.getvalue(), pdf_bytes
 
+# --- 7. INTERFAZ ---
 WMN_DATA_URL = "https://raw.githubusercontent.com/WebBreacher/WhatsMyName/main/wmn-data.json"
 APP_URL = "https://whatsmyname.streamlit.app/"
 
 @st.cache_data
 def load_sites():
-    try:
-        response = requests.get(WMN_DATA_URL)
-        data = response.json()
-        return data['sites']
-    except:
-        return []
+    try: return requests.get(WMN_DATA_URL).json()['sites']
+    except: return []
 
-# --- 8. INTERFAZ ---
 with st.sidebar:
-    try:
-        st.image("https://manuelbot59.com/images/FirmaManuelBot59.png", use_column_width=True)
-    except:
-        st.header("ManuelBot59")
+    try: st.image("https://manuelbot59.com/images/FirmaManuelBot59.png", use_column_width=True)
+    except: st.header("ManuelBot59")
     st.markdown("### 📌 Navegación")
-    st.markdown("""
-    - [🏠 Inicio](https://manuelbot59.com/)
-    - [🕵️ OSINT](https://manuelbot59.com/osint/)
-    """)
+    st.markdown("- [🏠 Inicio](https://manuelbot59.com/)")
+    st.markdown("- [🕵️ OSINT](https://manuelbot59.com/osint/)")
     st.markdown("---")
     st.markdown("### 📞 Soporte")
     st.markdown("📧 **Email:** ManuelBot@proton.me")
@@ -301,12 +284,11 @@ st.markdown("<h1 class='main-title'>ManuelBot59 Suite OSINT</h1>", unsafe_allow_
 
 tab1, tab2 = st.tabs(["👤 Búsqueda de Usuario", "📧 Análisis de Correo"])
 
-# --- TAB 1: USUARIOS ---
+# TAB 1
 with tab1:
     st.markdown("### 🔎 Rastreador de Huella Digital")
-    
-    # CONTENEDOR DE PROGRESO EN EL TOPE (SOLUCIÓN "ARRIBA")
-    progress_container = st.empty() 
+    # BARRA DE PROGRESO ARRIBA
+    progress_placeholder = st.empty()
     
     sites = load_sites()
     categories = sorted(list(set([s['cat'] for s in sites])))
@@ -322,14 +304,11 @@ with tab1:
         st.session_state.results = []
         target_sites = sites if cat_filter == "Todas" else [s for s in sites if s['cat'] == cat_filter]
         
-        # Inicializar barra dentro del contenedor superior
-        with progress_container.container():
+        with progress_placeholder.container():
             prog_bar = st.progress(0)
             status_text = st.empty()
         
         processed = 0
-        
-        # Preparar grid vacío
         with user_res_container:
             grid_dynamic = st.empty()
         
@@ -338,72 +317,47 @@ with tab1:
             for future in as_completed(futures):
                 res = future.result()
                 processed += 1
-                
-                # Actualizar barra ARRIBA
-                if processed % 10 == 0 or processed == len(target_sites):
+                if processed % 5 == 0 or processed == len(target_sites):
                     prog_bar.progress(processed / len(target_sites))
                     status_text.caption(f"Verificando: {processed}/{len(target_sites)}")
                 
                 if res:
                     st.session_state.results.append(res)
-                    # Renderizado en vivo
                     with grid_dynamic.container():
                         cols = st.columns(2)
                         for i, item in enumerate(st.session_state.results):
                             with cols[i % 2]:
                                 with st.container(border=True):
-                                    cc1, cc2, cc3 = st.columns([1, 4, 2])
-                                    with cc1: st.image(item['image'], width=45)
+                                    cc1, cc2 = st.columns([1, 4])
+                                    with cc1: st.image(item['image'], width=40)
                                     with cc2:
                                         st.markdown(f"<div class='site-title'>{item['name']}</div>", unsafe_allow_html=True)
                                         st.markdown(f"<span class='site-cat'>{item['category']}</span>", unsafe_allow_html=True)
-                                    with cc3:
                                         st.link_button("🔗 Visitar", item['uri'], use_container_width=True)
-                                    
-                                    # SECCIÓN DETALLES RICOS (SOLUCIÓN "FOTOS Y DATOS")
                                     if item.get('details'):
-                                        with st.expander("👁️ Ver Detalles Extraídos", expanded=False):
+                                        with st.expander("👁️ Ver Detalles Extraídos"):
                                             d1, d2 = st.columns([1, 2])
-                                            with d1:
-                                                # Foto grande
-                                                st.image(item['image'], use_column_width=True, caption="Evidencia")
+                                            with d1: st.image(item['image'], use_column_width=True)
                                             with d2:
-                                                # Datos Clave/Valor
                                                 for k, v in item['details'].items():
                                                     st.markdown(f"**{k}:** {v}")
-                                    else:
-                                        st.caption(f"URL: {item['uri']}")
-
+        
         prog_bar.progress(100)
-        if st.session_state.results:
-            st.success(f"Encontrados: {len(st.session_state.results)}")
-            csv, pdf = generate_files(st.session_state.results, username)
-            st.download_button("Descargar CSV", csv, f"{username}.csv")
+    
+    # MOSTRAR BOTONES DE DESCARGA SI HAY RESULTADOS
+    if st.session_state.results:
+        st.divider()
+        st.subheader("📥 Exportar Reporte")
+        csv, txt, pdf = generate_files(st.session_state.results, username)
+        
+        d1, d2, d3 = st.columns(3)
+        with d1: st.download_button("📄 Descargar CSV", csv, f"{username}.csv", "text/csv", use_container_width=True)
+        with d2: st.download_button("📝 Descargar TXT", txt, f"{username}.txt", "text/plain", use_container_width=True)
+        with d3:
+            if pdf: st.download_button("📕 Descargar PDF", pdf, f"{username}.pdf", "application/pdf", use_container_width=True)
+            else: st.warning("PDF no disponible (Error de formato)")
 
-    # Renderizado Persistente
-    elif st.session_state.results:
-        with user_res_container:
-            cols = st.columns(2)
-            for i, item in enumerate(st.session_state.results):
-                with cols[i % 2]:
-                    with st.container(border=True):
-                        cc1, cc2, cc3 = st.columns([1, 4, 2])
-                        with cc1: st.image(item['image'], width=45)
-                        with cc2:
-                            st.markdown(f"<div class='site-title'>{item['name']}</div>", unsafe_allow_html=True)
-                            st.markdown(f"<span class='site-cat'>{item['category']}</span>", unsafe_allow_html=True)
-                        with cc3:
-                            st.link_button("🔗 Visitar", item['uri'], use_container_width=True)
-                        
-                        if item.get('details'):
-                            with st.expander("👁️ Ver Detalles Extraídos"):
-                                d1, d2 = st.columns([1, 2])
-                                with d1: st.image(item['image'], use_column_width=True)
-                                with d2:
-                                    for k, v in item['details'].items():
-                                        st.markdown(f"**{k}:** {v}")
-
-# --- TAB 2: CORREOS (Mantenido igual, funciona bien) ---
+# TAB 2
 with tab2:
     st.markdown("### 📧 Inteligencia de Correo")
     email_in = st.text_input("Correo electrónico", placeholder="ejemplo@gmail.com")
@@ -413,51 +367,48 @@ with tab2:
         with st.spinner("Analizando..."):
             data = analyze_email(email_in)
         
-        if not data['valid_format']:
-            st.error("Formato inválido")
+        if not data['valid_format']: st.error("Formato inválido")
         else:
-            c_tech, c_soc = st.columns(2)
-            with c_tech:
-                st.info(f"**Dominio:** {data['domain'].upper()}")
+            c_t, c_s = st.columns(2)
+            with c_t:
+                st.info(f"Dominio: {data['domain'].upper()}")
                 if data['has_mail_server']: st.success("✅ Servidor MX Activo")
-                else: st.error("❌ Dominio sin correo")
-            
-            with c_soc:
+            with c_s:
                 if data['gravatar']['found']:
                     st.success("✅ Gravatar Detectado")
-                    col_g1, col_g2 = st.columns([1, 3])
-                    with col_g1: st.image(data['gravatar']['image'], width=80)
-                    with col_g2:
-                        st.write(f"**Nombre:** {data['gravatar']['name']}")
-                        st.write(f"**Loc:** {data['gravatar']['location']}")
-                else:
-                    st.warning("No se encontró perfil público.")
-            
+                    g = data['gravatar']
+                    st.image(g['image'], width=80)
+                    st.write(f"**Nombre:** {g['name']}")
+                
+                if data.get('duolingo'):
+                    st.success("✅ Duolingo Detectado")
+                    d = data['duolingo']
+                    if d['image']: st.image(d['image'], width=80)
+                    st.write(f"**User:** {d['username']}")
+
             st.divider()
             st.markdown("### 👣 Huellas Digitales")
-            
-            # Botones de enlaces externos
             encoded_email = urllib.parse.quote(email_in)
-            username_part = email_in.split('@')[0]
             
-            links_map = [
-                ("Duolingo (JSON)", f"https://www.duolingo.com/2017-06-30/users?email={email_in}"),
+            links = [
+                ("Duolingo", f"https://www.duolingo.com/2017-06-30/users?email={email_in}"),
                 ("Spotify", f"https://spclient.wg.spotify.com/signup/public/v1/account?validate=1&email={email_in}"),
-                ("Twitter API", f"https://api.twitter.com/i/users/email_available.json?email={email_in}"),
+                ("Twitter", f"https://api.twitter.com/i/users/email_available.json?email={email_in}"),
                 ("HaveIBeenPwned", f"https://haveibeenpwned.com/account/{email_in}"),
                 ("Intelx", f"https://intelx.io/?s={encoded_email}"),
                 ("GitHub Commits", f"https://github.com/search?q=committer-email:{email_in}&type=commits")
             ]
             
-            cols_links = st.columns(4)
-            for i, (name, url) in enumerate(links_map):
-                with cols_links[i % 4]:
-                    st.link_button(f"🔎 {name}", url, use_container_width=True)
+            lc = st.columns(4)
+            for i, (name, url) in enumerate(links):
+                with lc[i % 4]: st.link_button(f"🔎 {name}", url, use_container_width=True)
 
-# Footer
+# Footer Actualizado
 st.markdown("""
 <div class="footer-credits">
-    Suite OSINT desarrollada por <a href="https://x.com/ManuelBot59" target="_blank"><strong>Manuel Travezaño</strong></a><br>
-    Powered by WhatsMyName & DNSPython
+    OSINT Suite developed by <a href="https://x.com/ManuelBot59" target="_blank"><strong>Manuel Travezaño</strong></a><br>
+    This tool is powered by <a href="https://github.com/WebBreacher/WhatsMyName" target="_blank">WhatsMyName</a>, 
+    <a href="https://github.com/soxoj/socid-extractor" target="_blank">socid-extractor</a> & 
+    <a href="https://www.dnspython.org/" target="_blank">DNSPython</a>
 </div>
 """, unsafe_allow_html=True)
