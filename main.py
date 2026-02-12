@@ -5,6 +5,13 @@ from fpdf import FPDF
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import io
 
+# Importamos la librería de extracción
+try:
+    from socid_extractor import extract as socid_extract
+except ImportError:
+    # Fallback por si no se instala correctamente
+    socid_extract = None
+
 # --- 1. CONFIGURACIÓN DE PÁGINA ---
 st.set_page_config(
     page_title="WhatsMyName Web | Herramienta SOCMINT | Manuel Travezaño",
@@ -13,31 +20,9 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# --- 2. BARRA LATERAL (SIDEBAR) - CARGA PRIMERO ---
-with st.sidebar:
-    try:
-        st.image("https://manuelbot59.com/images/FirmaManuelBot59.png", use_column_width=True)
-    except:
-        st.header("ManuelBot59")
-        
-    st.markdown("### 📌 Navegación")
-    st.markdown("""
-    - [🏠 Inicio](https://manuelbot59.com/)
-    - [🎓 Cursos](https://manuelbot59.com/formacion/)
-    - [🛒 Tienda](https://manuelbot59.com/tienda/)
-    - [🕵️ OSINT](https://manuelbot59.com/osint/)
-    """)
-    st.markdown("---")
-    st.markdown("### 📞 Soporte")
-    st.markdown("📧 **Email:** ManuelBot@proton.me")
-    st.markdown("✈️ **Telegram Soporte:** [ManuelBot59](https://t.me/ManuelBot59_Bot)")
-    st.markdown("---")
-    st.caption("v3.0 Pro | Powered by WhatsMyName")
-
-# --- 3. ESTILOS CSS (DISEÑO RECTANGULAR "HIPPIE STYLE") ---
+# --- 2. ESTILOS CSS PROFESIONALES ---
 st.markdown("""
 <style>
-    /* Ocultar elementos nativos */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     header {visibility: hidden;}
@@ -57,15 +42,16 @@ st.markdown("""
         padding-top: 1rem;
     }
 
-    /* ESTILO DE TARJETA TIPO "HIPPIE OSINT" */
+    /* TARJETA DE RESULTADO */
     div[data-testid="stVerticalBlockBorderWrapper"] {
         background-color: white;
         border-radius: 8px;
         padding: 15px;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        box-shadow: 0 2px 5px rgba(0,0,0,0.05);
         border: 1px solid #e2e8f0;
+        border-left: 5px solid #27ae60;
         margin-bottom: 15px;
-        transition: transform 0.2s, box-shadow 0.2s;
+        transition: transform 0.2s;
     }
     
     div[data-testid="stVerticalBlockBorderWrapper"]:hover {
@@ -74,12 +60,11 @@ st.markdown("""
         border-color: #00c6fb;
     }
 
-    /* Títulos y textos */
     .site-title {
         font-size: 1.1rem;
         font-weight: 700;
         color: #1c3961;
-        margin-bottom: 0px;
+        margin-bottom: 2px;
     }
     .site-cat {
         font-size: 0.8rem;
@@ -88,6 +73,7 @@ st.markdown("""
         padding: 2px 8px;
         border-radius: 12px;
         display: inline-block;
+        margin-bottom: 10px;
     }
 
     /* Footer */
@@ -107,7 +93,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# --- 4. LÓGICA DE BÚSQUEDA Y EXTRACCIÓN ---
+# --- 3. FUNCIONES AUXILIARES Y EXTRACTOR ---
 WMN_DATA_URL = "https://raw.githubusercontent.com/WebBreacher/WhatsMyName/main/wmn-data.json"
 APP_URL = "https://whatsmyname.streamlit.app/"
 
@@ -120,67 +106,65 @@ def load_sites():
     except:
         return []
 
-# --- BONUS: Función para extraer datos reales de GitHub (Para que se vea como en la foto) ---
-def get_github_details(username):
+def get_profile_details(url):
+    """
+    Usa socid-extractor para obtener datos reales del perfil.
+    Retorna un diccionario con la info y la imagen.
+    """
+    if not socid_extract:
+        return {}, None
+
     try:
-        api_url = f"https://api.github.com/users/{username}"
-        r = requests.get(api_url, timeout=5)
-        if r.status_code == 200:
-            data = r.json()
-            return {
-                "Bio": data.get("bio", "Sin bio"),
-                "Ubicación": data.get("location", "Desconocida"),
-                "Seguidores": data.get("followers", 0),
-                "Repos Públicos": data.get("public_repos", 0),
-                "Avatar": data.get("avatar_url")
-            }
+        # socid-extractor intenta hacer scraping del sitio
+        data = socid_extract(url)
+        
+        if not data:
+            return {}, None
+            
+        # Filtramos campos vacíos
+        details = {k: v for k, v in data.items() if v and k != 'image'}
+        image = data.get('image')
+        
+        return details, image
     except:
-        pass
-    return None
+        return {}, None
 
 def check_site(site, username):
     uri = site['uri_check'].format(account=username)
     try:
         headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
+        # 1. Validación rápida de existencia
         r = requests.get(uri, headers=headers, timeout=5)
         
         if r.status_code == site['e_code']:
             if site.get('e_string') and site['e_string'] not in r.text:
                 return None
             
-            # Datos básicos
-            details = {}
-            image_url = None
+            # 2. Extracción de Inteligencia (Fase Lenta pero Rica)
+            # Solo ejecutamos esto si el sitio existe
+            extracted_details, extracted_image = get_profile_details(uri)
             
-            # --- Lógica de Extracción Especial (Ejemplo para GitHub) ---
-            if site['name'] == "GitHub":
-                gh_data = get_github_details(username)
-                if gh_data:
-                    details = gh_data
-                    image_url = gh_data.get("Avatar")
-            
-            # Fallback para imagen (Favicon de Google)
-            if not image_url:
+            # Fallback de imagen si socid no encuentra nada
+            if not extracted_image:
                 domain = uri.split('/')[2]
-                image_url = f"https://www.google.com/s2/favicons?domain={domain}&sz=128"
+                extracted_image = f"https://www.google.com/s2/favicons?domain={domain}&sz=128"
 
             return {
                 "name": site['name'],
                 "uri": uri,
                 "category": site['cat'],
-                "image": image_url,
-                "details": details # Diccionario con info extra
+                "image": extracted_image,
+                "details": extracted_details
             }
     except:
         return None
     return None
 
-# --- 5. LIMPIEZA DE TEXTO (Evita Error PDF) ---
+# --- 4. GENERACIÓN DE REPORTES (BLINDADO) ---
 def clean_text(text):
     if not isinstance(text, str): return str(text)
     return text.encode('latin-1', 'replace').decode('latin-1')
 
-# --- 6. CLASE PDF MEJORADA (Enlaces Limpios) ---
 class PDFReport(FPDF):
     def header(self):
         self.set_font('Arial', 'B', 15)
@@ -199,8 +183,7 @@ class PDFReport(FPDF):
 def generate_files(results, username):
     # CSV
     df = pd.DataFrame(results)
-    # Limpiar columnas complejas para el CSV
-    df_simple = df.drop(columns=['details'], errors='ignore')
+    df_simple = df.drop(columns=['details', 'image'], errors='ignore')
     csv = df_simple.to_csv(index=False).encode('utf-8')
     
     # TXT
@@ -210,6 +193,8 @@ def generate_files(results, username):
     txt.write("="*60 + "\n\n")
     for item in results:
         txt.write(f"Plataforma: {item['name']}\nURL: {item['uri']}\n")
+        if item['details']:
+            txt.write(f"  > Datos: {item['details']}\n")
     
     # PDF
     try:
@@ -237,64 +222,78 @@ def generate_files(results, username):
             pdf.cell(60, 8, name, 1)
             pdf.cell(40, 8, cat, 1)
             
-            # ENLACE LIMPIO: Texto "Enlace aquí" con hipervínculo real
+            # ENLACE LIMPIO
             pdf.set_text_color(0, 0, 255)
-            # cell(w, h, txt, border, ln, align, fill, link)
             pdf.cell(90, 8, clean_text("Enlace aqui"), 1, 1, 'C', link=item['uri'])
             pdf.set_text_color(0, 0, 0)
             
         pdf_bytes = pdf.output(dest='S').encode('latin-1', 'ignore')
-    except Exception as e:
-        print(f"Error PDF: {e}")
+    except:
         pdf_bytes = None
         
     return csv, txt.getvalue(), pdf_bytes
 
-# --- 7. INTERFAZ PRINCIPAL ---
+# --- 5. INTERFAZ PRINCIPAL ---
+# BARRA LATERAL
+with st.sidebar:
+    try:
+        st.image("https://manuelbot59.com/images/FirmaManuelBot59.png", use_column_width=True)
+    except:
+        st.header("ManuelBot59")
+        
+    st.markdown("### 📌 Navegación")
+    st.markdown("""
+    - [🏠 Inicio](https://manuelbot59.com/)
+    - [🎓 Cursos](https://manuelbot59.com/formacion/)
+    - [🛒 Tienda](https://manuelbot59.com/tienda/)
+    - [🕵️ OSINT](https://manuelbot59.com/osint/)
+    """)
+    st.markdown("---")
+    st.markdown("### 📞 Soporte")
+    st.markdown("📧 **Email:** ManuelBot@proton.me")
+    st.markdown("✈️ **Telegram Soporte:** [ManuelBot59](https://t.me/ManuelBot59_Bot)")
+    st.markdown("---")
+
 st.markdown("<h1 class='main-title'>WhatsMyName Web</h1>", unsafe_allow_html=True)
 st.markdown("<p style='text-align: center; color: #666;'>Herramienta SOCMINT | Manuel Travezaño</p>", unsafe_allow_html=True)
 
 sites = load_sites()
 categories = sorted(list(set([s['cat'] for s in sites])))
 
-# Estado
-if "results" not in st.session_state:
-    st.session_state.results = []
-
 # Buscador
-c_search_1, c_search_2, c_search_3 = st.columns([3, 1, 1])
-with c_search_1:
+c1, c2, c3 = st.columns([3, 1, 1])
+with c1:
     username = st.text_input("Usuario", placeholder="Ej: manuelbot59", label_visibility="collapsed")
-with c_search_2:
+with c2:
     cat_filter = st.selectbox("Cat", ["Todas"] + categories, label_visibility="collapsed")
-with c_search_3:
+with c3:
     run_btn = st.button("🔍 INVESTIGAR", use_container_width=True, type="primary")
 
-# Contenedor de Resultados
+# Contenedor Progresivo
 results_placeholder = st.container()
 
 # Lógica de Ejecución
 if run_btn and username:
-    st.session_state.results = [] # Limpiar
+    st.session_state.results = []
     target_sites = sites if cat_filter == "Todas" else [s for s in sites if s['cat'] == cat_filter]
     
     prog_bar = st.progress(0)
     status_text = st.empty()
     processed = 0
     
-    # Placeholder del Grid para actualización en tiempo real
     with results_placeholder:
-        st.markdown("### ⏳ Analizando en tiempo real...")
+        st.markdown("### ⏳ Analizando y Extrayendo Datos...")
         grid_dynamic = st.empty()
     
-    with ThreadPoolExecutor(max_workers=20) as executor:
+    # Reducimos hilos a 10 porque socid-extractor consume más recursos
+    with ThreadPoolExecutor(max_workers=10) as executor:
         futures = {executor.submit(check_site, s, username): s for s in target_sites}
         
         for future in as_completed(futures):
             res = future.result()
             processed += 1
             
-            if processed % 10 == 0 or processed == len(target_sites):
+            if processed % 5 == 0 or processed == len(target_sites):
                 prog_bar.progress(processed / len(target_sites))
                 status_text.caption(f"Verificando: {processed}/{len(target_sites)}")
             
@@ -302,14 +301,12 @@ if run_btn and username:
                 st.session_state.results.append(res)
                 
                 # --- RENDERIZADO PROGRESIVO ---
-                # Redibujamos la cuadrícula cada vez que hay un hallazgo
                 with grid_dynamic.container():
-                    # Usamos 2 columnas para el estilo rectangular ancho
                     cols = st.columns(2)
                     for i, item in enumerate(st.session_state.results):
                         with cols[i % 2]:
                             with st.container(border=True):
-                                # Layout: Icono | Info | Botón Visitar
+                                # Cabecera Tarjeta
                                 c1, c2, c3 = st.columns([1, 4, 2])
                                 with c1:
                                     st.image(item['image'], width=45)
@@ -319,22 +316,18 @@ if run_btn and username:
                                 with c3:
                                     st.link_button("🔗 Visitar", item['uri'], use_container_width=True)
                                 
-                                # Sección "Ver Detalles" (Expander)
-                                # Solo si hay detalles extra (como el scraper de GitHub) o siempre para la foto
-                                with st.expander("👁️ Ver Detalles Extraídos"):
-                                    d1, d2 = st.columns([1, 2])
-                                    with d1:
-                                        # Imagen más grande
-                                        st.image(item['image'], use_column_width=True, caption="Evidencia")
-                                    with d2:
-                                        # Si hay detalles técnicos (Scraping), los mostramos
-                                        if item['details']:
+                                # Detalles Extraídos (Si existen)
+                                if item['details']:
+                                    with st.expander("👁️ Ver Detalles Extraídos", expanded=False):
+                                        d1, d2 = st.columns([1, 2])
+                                        with d1:
+                                            st.image(item['image'], use_column_width=True, caption="Perfil")
+                                        with d2:
                                             for k, v in item['details'].items():
-                                                if k != "Avatar": # No repetir avatar
-                                                    st.markdown(f"**{k}:** {v}")
-                                        else:
-                                            st.info("Solo detección de existencia disponible.")
-                                            st.text(f"URL: {item['uri']}")
+                                                st.markdown(f"**{k}:** {v}")
+                                else:
+                                    # Si no hay datos extra, solo mostramos un mensaje discreto o nada
+                                    st.caption("Solo detección de cuenta.")
 
     prog_bar.progress(100)
     if len(st.session_state.results) > 0:
@@ -342,7 +335,7 @@ if run_btn and username:
     else:
         status_text.warning("❌ No se encontraron resultados.")
 
-# Renderizado Persistente (Si hay datos y no se está buscando)
+# Renderizado Persistente
 elif st.session_state.results:
     with results_placeholder:
         st.divider()
@@ -360,19 +353,16 @@ elif st.session_state.results:
                     with c3:
                         st.link_button("🔗 Visitar", item['uri'], use_container_width=True)
                     
-                    with st.expander("👁️ Ver Detalles Extraídos"):
-                        d1, d2 = st.columns([1, 2])
-                        with d1:
-                            st.image(item['image'], use_column_width=True, caption="Evidencia")
-                        with d2:
-                            if item['details']:
+                    if item['details']:
+                        with st.expander("👁️ Ver Detalles Extraídos"):
+                            d1, d2 = st.columns([1, 2])
+                            with d1:
+                                st.image(item['image'], use_column_width=True, caption="Perfil")
+                            with d2:
                                 for k, v in item['details'].items():
-                                    if k != "Avatar":
-                                        st.markdown(f"**{k}:** {v}")
-                            else:
-                                st.caption(f"URL Detectada: {item['uri']}")
+                                    st.markdown(f"**{k}:** {v}")
 
-# --- 9. ZONA DE DESCARGA ---
+# --- 6. ZONA DE DESCARGA ---
 if st.session_state.results:
     st.divider()
     st.subheader("📥 Exportar Reporte")
@@ -388,7 +378,7 @@ if st.session_state.results:
         if pdf_data:
             st.download_button("📕 Descargar PDF", pdf_data, f"report_{username}.pdf", "application/pdf", use_container_width=True)
         else:
-            st.warning("⚠️ Error generando PDF (Caracteres extraños)")
+            st.warning("⚠️ Error generando PDF")
 
 # Footer
 st.markdown("""
