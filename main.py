@@ -7,17 +7,34 @@ import io
 
 # --- 1. CONFIGURACIÓN DE PÁGINA ---
 st.set_page_config(
-    page_title="WhatsMyName Web | Herramienta SOCMINT",
+    page_title="WhatsMyName Web | Herramienta SOCMINT | Manuel Travezaño",
     page_icon="🕵️‍♂️",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# --- 2. GESTIÓN DE ESTADO (MEMORIA) ---
-if "results" not in st.session_state:
-    st.session_state.results = []
+# --- 2. BARRA LATERAL (SIDEBAR) - CARGA PRIMERO ---
+with st.sidebar:
+    try:
+        st.image("https://manuelbot59.com/images/FirmaManuelBot59.png", use_column_width=True)
+    except:
+        st.header("ManuelBot59")
+        
+    st.markdown("### 📌 Navegación")
+    st.markdown("""
+    - [🏠 Inicio](https://manuelbot59.com/)
+    - [🎓 Cursos](https://manuelbot59.com/formacion/)
+    - [🛒 Tienda](https://manuelbot59.com/tienda/)
+    - [🕵️ OSINT](https://manuelbot59.com/osint/)
+    """)
+    st.markdown("---")
+    st.markdown("### 📞 Soporte")
+    st.markdown("📧 **Email:** ManuelBot@proton.me")
+    st.markdown("✈️ **Telegram Soporte:** [ManuelBot59](https://t.me/ManuelBot59_Bot)")
+    st.markdown("---")
+    st.caption("v3.0 Pro | Powered by WhatsMyName")
 
-# --- 3. ESTILOS CSS REFINADOS ---
+# --- 3. ESTILOS CSS (DISEÑO RECTANGULAR "HIPPIE STYLE") ---
 st.markdown("""
 <style>
     /* Ocultar elementos nativos */
@@ -27,9 +44,9 @@ st.markdown("""
 
     .stApp {
         background-color: #f4f7f6;
+        color: #333;
     }
 
-    /* TÍTULO PRINCIPAL */
     h1 {
         background: linear-gradient(45deg, #1c3961, #0066a9);
         -webkit-background-clip: text;
@@ -40,25 +57,40 @@ st.markdown("""
         padding-top: 1rem;
     }
 
-    /* TARJETAS DE RESULTADOS (SOLO LAS QUE TIENEN DATOS) */
+    /* ESTILO DE TARJETA TIPO "HIPPIE OSINT" */
     div[data-testid="stVerticalBlockBorderWrapper"] {
         background-color: white;
-        border-radius: 10px;
+        border-radius: 8px;
         padding: 15px;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.05);
-        border: 1px solid #e0e0e0;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        border: 1px solid #e2e8f0;
         margin-bottom: 15px;
-        height: 100%; /* Altura uniforme */
+        transition: transform 0.2s, box-shadow 0.2s;
+    }
+    
+    div[data-testid="stVerticalBlockBorderWrapper"]:hover {
+        box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+        transform: translateY(-2px);
+        border-color: #00c6fb;
     }
 
-    /* ESTILO BOTONES */
-    div.stButton > button {
-        width: 100%;
-        border-radius: 5px;
-        font-weight: bold;
+    /* Títulos y textos */
+    .site-title {
+        font-size: 1.1rem;
+        font-weight: 700;
+        color: #1c3961;
+        margin-bottom: 0px;
+    }
+    .site-cat {
+        font-size: 0.8rem;
+        color: #64748b;
+        background-color: #f1f5f9;
+        padding: 2px 8px;
+        border-radius: 12px;
+        display: inline-block;
     }
 
-    /* FOOTER */
+    /* Footer */
     .footer-credits {
         text-align: center;
         margin-top: 50px;
@@ -75,7 +107,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# --- 4. FUNCIONES AUXILIARES ---
+# --- 4. LÓGICA DE BÚSQUEDA Y EXTRACCIÓN ---
 WMN_DATA_URL = "https://raw.githubusercontent.com/WebBreacher/WhatsMyName/main/wmn-data.json"
 APP_URL = "https://whatsmyname.streamlit.app/"
 
@@ -88,6 +120,24 @@ def load_sites():
     except:
         return []
 
+# --- BONUS: Función para extraer datos reales de GitHub (Para que se vea como en la foto) ---
+def get_github_details(username):
+    try:
+        api_url = f"https://api.github.com/users/{username}"
+        r = requests.get(api_url, timeout=5)
+        if r.status_code == 200:
+            data = r.json()
+            return {
+                "Bio": data.get("bio", "Sin bio"),
+                "Ubicación": data.get("location", "Desconocida"),
+                "Seguidores": data.get("followers", 0),
+                "Repos Públicos": data.get("public_repos", 0),
+                "Avatar": data.get("avatar_url")
+            }
+    except:
+        pass
+    return None
+
 def check_site(site, username):
     uri = site['uri_check'].format(account=username)
     try:
@@ -98,160 +148,144 @@ def check_site(site, username):
             if site.get('e_string') and site['e_string'] not in r.text:
                 return None
             
-            # Recuperar favicon para imagen
-            domain = uri.split('/')[2]
-            favicon = f"https://www.google.com/s2/favicons?domain={domain}&sz=128"
+            # Datos básicos
+            details = {}
+            image_url = None
             
+            # --- Lógica de Extracción Especial (Ejemplo para GitHub) ---
+            if site['name'] == "GitHub":
+                gh_data = get_github_details(username)
+                if gh_data:
+                    details = gh_data
+                    image_url = gh_data.get("Avatar")
+            
+            # Fallback para imagen (Favicon de Google)
+            if not image_url:
+                domain = uri.split('/')[2]
+                image_url = f"https://www.google.com/s2/favicons?domain={domain}&sz=128"
+
             return {
                 "name": site['name'],
                 "uri": uri,
                 "category": site['cat'],
-                "image": favicon
+                "image": image_url,
+                "details": details # Diccionario con info extra
             }
     except:
         return None
     return None
 
-# --- 5. LIMPIEZA DE TEXTO PARA PDF (CRÍTICO) ---
+# --- 5. LIMPIEZA DE TEXTO (Evita Error PDF) ---
 def clean_text(text):
-    """Elimina caracteres no soportados por FPDF (latin-1)"""
-    if not isinstance(text, str):
-        return str(text)
-    # Codifica a ASCII ignorando errores y decodifica de nuevo
-    return text.encode('latin-1', 'ignore').decode('latin-1')
+    if not isinstance(text, str): return str(text)
+    return text.encode('latin-1', 'replace').decode('latin-1')
 
-# --- 6. GENERADOR DE REPORTES (PDF, CSV, TXT) ---
+# --- 6. CLASE PDF MEJORADA (Enlaces Limpios) ---
 class PDFReport(FPDF):
     def header(self):
-        self.set_font('Arial', 'B', 14)
+        self.set_font('Arial', 'B', 15)
         self.cell(0, 10, clean_text('Reporte SOCMINT - WhatsMyName Web'), 0, 1, 'C')
         self.ln(5)
 
     def footer(self):
-        self.set_y(-25)
+        self.set_y(-20)
         self.set_font('Arial', 'I', 8)
-        self.cell(0, 5, clean_text('Autor: Manuel Travezano | Herramienta: WhatsMyName Web'), 0, 1, 'C')
-        
-        # Enlace clickeable en el PDF
+        self.cell(0, 5, clean_text('Autor: Manuel Travezaño | Herramienta: WhatsMyName Web'), 0, 1, 'C')
         self.set_text_color(0, 0, 255)
-        self.cell(0, 5, clean_text(APP_URL), 0, 1, 'C', link=APP_URL)
-        
+        self.cell(0, 5, APP_URL, 0, 1, 'C', link=APP_URL)
         self.set_text_color(0, 0, 0)
-        self.cell(0, 5, f'Pagina {self.page_no()}', 0, 0, 'C')
+        self.cell(0, 5, f'Pag {self.page_no()}', 0, 0, 'C')
 
 def generate_files(results, username):
-    # 1. CSV
+    # CSV
     df = pd.DataFrame(results)
-    csv = df.to_csv(index=False).encode('utf-8')
+    # Limpiar columnas complejas para el CSV
+    df_simple = df.drop(columns=['details'], errors='ignore')
+    csv = df_simple.to_csv(index=False).encode('utf-8')
     
-    # 2. TXT
+    # TXT
     txt = io.StringIO()
     txt.write(f"REPORTE DE INVESTIGACION - USUARIO: {username}\n")
     txt.write(f"Herramienta: {APP_URL}\n")
     txt.write("="*60 + "\n\n")
     for item in results:
-        txt.write(f"Plataforma: {item['name']}\nCategoria: {item['category']}\nEnlace: {item['uri']}\n{'-'*30}\n")
+        txt.write(f"Plataforma: {item['name']}\nURL: {item['uri']}\n")
     
-    # 3. PDF (Blindado contra errores)
-    pdf_bytes = None
+    # PDF
     try:
         pdf = PDFReport()
         pdf.add_page()
         pdf.set_font("Arial", size=10)
         
-        pdf.cell(0, 10, clean_text(f"Usuario Investigado: {username}"), ln=1)
+        pdf.cell(0, 10, clean_text(f"Objetivo: {username}"), ln=1)
         pdf.cell(0, 10, f"Total Hallazgos: {len(results)}", ln=1)
         pdf.ln(5)
         
-        # Encabezados Tabla
+        # Encabezados
         pdf.set_fill_color(240, 240, 240)
         pdf.set_font("Arial", 'B', 9)
-        pdf.cell(50, 8, clean_text("Plataforma"), 1, 0, 'L', 1)
+        pdf.cell(60, 8, clean_text("Plataforma"), 1, 0, 'L', 1)
         pdf.cell(40, 8, clean_text("Categoría"), 1, 0, 'L', 1)
-        pdf.cell(100, 8, clean_text("Enlace"), 1, 1, 'L', 1)
+        pdf.cell(90, 8, clean_text("Enlace"), 1, 1, 'L', 1)
         
         # Filas
-        pdf.set_font("Arial", size=8)
+        pdf.set_font("Arial", size=9)
         for item in results:
-            name = clean_text(item['name'][:25])
+            name = clean_text(item['name'][:30])
             cat = clean_text(item['category'][:20])
-            uri = clean_text(item['uri'][:60])
             
-            pdf.cell(50, 8, name, 1)
+            pdf.cell(60, 8, name, 1)
             pdf.cell(40, 8, cat, 1)
-            # Celda con enlace
+            
+            # ENLACE LIMPIO: Texto "Enlace aquí" con hipervínculo real
             pdf.set_text_color(0, 0, 255)
-            pdf.cell(100, 8, uri, 1, 1, link=item['uri'])
+            # cell(w, h, txt, border, ln, align, fill, link)
+            pdf.cell(90, 8, clean_text("Enlace aqui"), 1, 1, 'C', link=item['uri'])
             pdf.set_text_color(0, 0, 0)
             
         pdf_bytes = pdf.output(dest='S').encode('latin-1', 'ignore')
     except Exception as e:
-        print(f"Error generando PDF: {e}") # Log interno para depuración
+        print(f"Error PDF: {e}")
+        pdf_bytes = None
         
     return csv, txt.getvalue(), pdf_bytes
 
-# --- 7. MODAL DE DETALLES ---
-@st.dialog("Detalles del Perfil")
-def show_details_modal(item):
-    st.markdown(f"### {item['name']}")
-    st.caption(f"Categoría: {item['category']}")
-    st.markdown("---")
-    
-    # Imagen centrada 60%
-    c1, c2, c3 = st.columns([1, 3, 1])
-    with c2:
-        st.image(item['image'], caption="Vista Previa", use_column_width=True)
-    
-    st.markdown("---")
-    # Botón de enlace (Verde)
-    st.link_button("🔗 Ir al Sitio Oficial", item['uri'], type="primary", use_container_width=True)
-
-
-# --- 8. BARRA LATERAL (Siempre visible) ---
-with st.sidebar:
-    st.image("https://manuelbot59.com/images/FirmaManuelBot59.png", use_column_width=True)
-    st.markdown("### 📌 Navegación")
-    st.markdown("- [🏠 Inicio](https://manuelbot59.com/)")
-    st.markdown("- [🎓 Cursos](https://manuelbot59.com/formacion/)")
-    st.markdown("- [🕵️ OSINT](https://manuelbot59.com/osint/)")
-    st.markdown("---")
-    st.markdown("### 📞 Contacto")
-    st.markdown("📧 **Email:** ManuelBot@proton.me")
-    st.markdown("✈️ **Telegram Soporte:** [ManuelBot59](https://t.me/ManuelBot59_Bot)")
-    st.markdown("---")
-
-# --- 9. INTERFAZ PRINCIPAL ---
-st.markdown("<h1 style='text-align: center;'>WhatsMyName Web</h1>", unsafe_allow_html=True)
+# --- 7. INTERFAZ PRINCIPAL ---
+st.markdown("<h1 class='main-title'>WhatsMyName Web</h1>", unsafe_allow_html=True)
 st.markdown("<p style='text-align: center; color: #666;'>Herramienta SOCMINT | Manuel Travezaño</p>", unsafe_allow_html=True)
 
 sites = load_sites()
 categories = sorted(list(set([s['cat'] for s in sites])))
 
+# Estado
+if "results" not in st.session_state:
+    st.session_state.results = []
+
 # Buscador
-c1, c2, c3 = st.columns([3, 1, 1])
-with c1:
+c_search_1, c_search_2, c_search_3 = st.columns([3, 1, 1])
+with c_search_1:
     username = st.text_input("Usuario", placeholder="Ej: manuelbot59", label_visibility="collapsed")
-with c2:
+with c_search_2:
     cat_filter = st.selectbox("Cat", ["Todas"] + categories, label_visibility="collapsed")
-with c3:
+with c_search_3:
     run_btn = st.button("🔍 INVESTIGAR", use_container_width=True, type="primary")
 
-# Contenedor de Resultados (Placeholder)
-results_container = st.container()
+# Contenedor de Resultados
+results_placeholder = st.container()
 
 # Lógica de Ejecución
 if run_btn and username:
-    st.session_state.results = []
+    st.session_state.results = [] # Limpiar
     target_sites = sites if cat_filter == "Todas" else [s for s in sites if s['cat'] == cat_filter]
     
     prog_bar = st.progress(0)
     status_text = st.empty()
     processed = 0
     
-    # Creamos la cuadrícula vacía que iremos llenando
-    with results_container:
-        st.markdown("### ⏳ Analizando...")
-        grid_placeholder = st.empty()
+    # Placeholder del Grid para actualización en tiempo real
+    with results_placeholder:
+        st.markdown("### ⏳ Analizando en tiempo real...")
+        grid_dynamic = st.empty()
     
     with ThreadPoolExecutor(max_workers=20) as executor:
         futures = {executor.submit(check_site, s, username): s for s in target_sites}
@@ -260,28 +294,47 @@ if run_btn and username:
             res = future.result()
             processed += 1
             
-            # Barra de progreso suave
-            if processed % 5 == 0 or processed == len(target_sites):
+            if processed % 10 == 0 or processed == len(target_sites):
                 prog_bar.progress(processed / len(target_sites))
                 status_text.caption(f"Verificando: {processed}/{len(target_sites)}")
             
             if res:
                 st.session_state.results.append(res)
-                # Redibujar cuadrícula
-                with grid_placeholder.container():
-                    cols = st.columns(4)
+                
+                # --- RENDERIZADO PROGRESIVO ---
+                # Redibujamos la cuadrícula cada vez que hay un hallazgo
+                with grid_dynamic.container():
+                    # Usamos 2 columnas para el estilo rectangular ancho
+                    cols = st.columns(2)
                     for i, item in enumerate(st.session_state.results):
-                        with cols[i % 4]:
+                        with cols[i % 2]:
                             with st.container(border=True):
-                                st.markdown(f"**{item['name']}**")
-                                st.caption(item['category'])
+                                # Layout: Icono | Info | Botón Visitar
+                                c1, c2, c3 = st.columns([1, 4, 2])
+                                with c1:
+                                    st.image(item['image'], width=45)
+                                with c2:
+                                    st.markdown(f"<div class='site-title'>{item['name']}</div>", unsafe_allow_html=True)
+                                    st.markdown(f"<span class='site-cat'>{item['category']}</span>", unsafe_allow_html=True)
+                                with c3:
+                                    st.link_button("🔗 Visitar", item['uri'], use_container_width=True)
                                 
-                                # Botón Modal (Clave única usando índice)
-                                if st.button("👁️ Ver", key=f"v_{i}_{item['name']}"):
-                                    show_details_modal(item)
-                                
-                                # Enlace directo
-                                st.markdown(f"<a href='{item['uri']}' target='_blank' style='text-decoration:none; color:#1c3961; font-weight:bold; font-size:0.9em;'>🔗 Enlace Directo</a>", unsafe_allow_html=True)
+                                # Sección "Ver Detalles" (Expander)
+                                # Solo si hay detalles extra (como el scraper de GitHub) o siempre para la foto
+                                with st.expander("👁️ Ver Detalles Extraídos"):
+                                    d1, d2 = st.columns([1, 2])
+                                    with d1:
+                                        # Imagen más grande
+                                        st.image(item['image'], use_column_width=True, caption="Evidencia")
+                                    with d2:
+                                        # Si hay detalles técnicos (Scraping), los mostramos
+                                        if item['details']:
+                                            for k, v in item['details'].items():
+                                                if k != "Avatar": # No repetir avatar
+                                                    st.markdown(f"**{k}:** {v}")
+                                        else:
+                                            st.info("Solo detección de existencia disponible.")
+                                            st.text(f"URL: {item['uri']}")
 
     prog_bar.progress(100)
     if len(st.session_state.results) > 0:
@@ -289,25 +342,37 @@ if run_btn and username:
     else:
         status_text.warning("❌ No se encontraron resultados.")
 
-# Renderizado Persistente (Si hay resultados y no estamos buscando)
+# Renderizado Persistente (Si hay datos y no se está buscando)
 elif st.session_state.results:
-    with results_container:
+    with results_placeholder:
         st.divider()
         st.markdown(f"### 🎯 Resultados: {len(st.session_state.results)}")
-        
-        cols = st.columns(4)
+        cols = st.columns(2)
         for i, item in enumerate(st.session_state.results):
-            with cols[i % 4]:
+            with cols[i % 2]:
                 with st.container(border=True):
-                    st.markdown(f"**{item['name']}**")
-                    st.caption(item['category'])
+                    c1, c2, c3 = st.columns([1, 4, 2])
+                    with c1:
+                        st.image(item['image'], width=45)
+                    with c2:
+                        st.markdown(f"<div class='site-title'>{item['name']}</div>", unsafe_allow_html=True)
+                        st.markdown(f"<span class='site-cat'>{item['category']}</span>", unsafe_allow_html=True)
+                    with c3:
+                        st.link_button("🔗 Visitar", item['uri'], use_container_width=True)
                     
-                    if st.button("👁️ Ver", key=f"p_v_{i}_{item['name']}"):
-                        show_details_modal(item)
-                    
-                    st.markdown(f"<a href='{item['uri']}' target='_blank' style='text-decoration:none; color:#1c3961; font-weight:bold; font-size:0.9em;'>🔗 Enlace Directo</a>", unsafe_allow_html=True)
+                    with st.expander("👁️ Ver Detalles Extraídos"):
+                        d1, d2 = st.columns([1, 2])
+                        with d1:
+                            st.image(item['image'], use_column_width=True, caption="Evidencia")
+                        with d2:
+                            if item['details']:
+                                for k, v in item['details'].items():
+                                    if k != "Avatar":
+                                        st.markdown(f"**{k}:** {v}")
+                            else:
+                                st.caption(f"URL Detectada: {item['uri']}")
 
-# --- 10. ZONA DE DESCARGA ---
+# --- 9. ZONA DE DESCARGA ---
 if st.session_state.results:
     st.divider()
     st.subheader("📥 Exportar Reporte")
@@ -323,7 +388,7 @@ if st.session_state.results:
         if pdf_data:
             st.download_button("📕 Descargar PDF", pdf_data, f"report_{username}.pdf", "application/pdf", use_container_width=True)
         else:
-            st.warning("⚠️ PDF no disponible (caracteres no soportados detectados)")
+            st.warning("⚠️ Error generando PDF (Caracteres extraños)")
 
 # Footer
 st.markdown("""
