@@ -3,3 +3,4 @@ requests
 pandas
 fpdf
 socid-extractor
+beautifulsoup4
