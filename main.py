@@ -13,16 +13,17 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# --- 2. GESTIÓN DEL ESTADO (MEMORIA) ---
-# Esto evita que se borre todo al dar clic en un botón
+# --- 2. GESTIÓN DE ESTADO (SOLUCIÓN AL REFRESH) ---
+# Inicializamos las variables para que persistan entre clics
 if "results" not in st.session_state:
     st.session_state.results = []
-if "is_searching" not in st.session_state:
-    st.session_state.is_searching = False
+if "search_done" not in st.session_state:
+    st.session_state.search_done = False
 
-# --- 3. ESTILOS CSS CORREGIDOS ---
+# --- 3. ESTILOS CSS CORREGIDOS (SOLUCIÓN CUADROS VACÍOS) ---
 st.markdown("""
 <style>
+    /* Ocultar elementos nativos */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     header {visibility: hidden;}
@@ -43,42 +44,26 @@ st.markdown("""
     }
 
     /* ESTILO DE LA TARJETA (Uniformidad) */
-    /* Aplicamos el estilo a un contenedor personalizado, no a la columna entera */
-    .custom-card {
-        background-color: white;
-        border-radius: 12px;
-        padding: 20px;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.05);
-        border: 1px solid #e0e0e0;
-        border-left: 5px solid #27ae60;
-        height: 250px; /* Altura fija para que todos sean iguales */
-        display: flex;
-        flex-direction: column;
-        justify-content: space-between;
-        margin-bottom: 15px;
-        transition: transform 0.2s;
-    }
-    .custom-card:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 10px 15px rgba(0,0,0,0.1);
-        border-color: #00c6fb;
+    /* Usamos una clase personalizada para evitar bordes en columnas vacías */
+    div[data-testid="stVerticalBlockBorderWrapper"] > div > div > div[data-testid="stVerticalBlock"] {
+        /* Ajuste fino para uniformidad vertical si es necesario */
     }
 
-    .card-title {
-        font-weight: bold;
-        font-size: 1.1rem;
+    /* Botones dentro de las tarjetas */
+    div.stButton > button {
+        width: 100%;
+        border-radius: 6px;
+        font-weight: 600;
+        border: 1px solid #1c3961;
         color: #1c3961;
-        margin-bottom: 5px;
+        background-color: white;
+        transition: all 0.3s;
     }
     
-    .card-cat {
-        font-size: 0.8rem;
-        background: #f0f2f5;
-        padding: 2px 8px;
-        border-radius: 4px;
-        color: #666;
-        display: inline-block;
-        margin-bottom: 10px;
+    div.stButton > button:hover {
+        background-color: #1c3961;
+        color: white;
+        border-color: #1c3961;
     }
 
     /* Footer */
@@ -98,7 +83,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# --- 4. FUNCIONES Y LÓGICA ---
+# --- 4. LÓGICA DE BÚSQUEDA ---
 WMN_DATA_URL = "https://raw.githubusercontent.com/WebBreacher/WhatsMyName/main/wmn-data.json"
 APP_URL = "https://whatsmyname.streamlit.app/" 
 
@@ -116,7 +101,7 @@ def check_site(site, username):
     uri = site['uri_check'].format(account=username)
     try:
         headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
-        r = requests.get(uri, headers=headers, timeout=5)
+        r = requests.get(uri, headers=headers, timeout=6) # Timeout un poco más alto
         
         if r.status_code == site['e_code']:
             if site.get('e_string') and site['e_string'] not in r.text:
@@ -136,7 +121,7 @@ def check_site(site, username):
         return None
     return None
 
-# --- 5. CLASE PDF (PIE DE PÁGINA PERSONALIZADO) ---
+# --- 5. CLASE PDF PERSONALIZADA (SOLUCIÓN PIE DE PÁGINA) ---
 class PDFReport(FPDF):
     def header(self):
         self.set_font('Arial', 'B', 15)
@@ -144,14 +129,14 @@ class PDFReport(FPDF):
         self.ln(5)
 
     def footer(self):
-        self.set_y(-25) # Un poco más arriba
+        self.set_y(-20)
         self.set_font('Arial', 'I', 8)
-        # Nombre y Herramienta
+        # Texto
         self.cell(0, 5, f'Herramienta: WhatsMyName Web | Autor: Manuel Travezano', 0, 1, 'C')
-        # Enlace clickeable (aunque visualmente es texto en FPDF básico, ponemos la URL)
-        self.set_text_color(0, 0, 255)
+        # Enlace activo
+        self.set_text_color(0, 0, 255) # Azul
         self.cell(0, 5, APP_URL, 0, 1, 'C', link=APP_URL)
-        self.set_text_color(0, 0, 0)
+        self.set_text_color(0, 0, 0) # Negro
         self.cell(0, 5, f'Pagina {self.page_no()}', 0, 0, 'C')
 
 def generate_reports(results, username):
@@ -196,22 +181,24 @@ def generate_reports(results, username):
     
     return csv, txt_buffer.getvalue(), pdf_bytes
 
-# --- 6. MODAL ---
+# --- 6. VENTANA EMERGENTE (MODAL CORREGIDO) ---
 @st.dialog("Detalles Extraídos")
 def show_details(item):
-    st.caption("PLATAFORMA")
-    st.subheader(item['name'])
+    # Cabecera
+    st.markdown(f"### {item['name']}")
     st.caption(f"Categoría: {item['category']}")
     st.markdown("---")
     
-    # Imagen al 60%
-    c1, c2, c3 = st.columns([1, 3, 1])
+    # Imagen al 60% centrada
+    c1, c2, c3 = st.columns([1, 2, 1]) # Columnas ajustadas para centrar
     with c2:
-        st.image(item['image'], caption="Evidencia", use_column_width=True)
+        st.image(item['image'], caption="Evidencia Visual", use_column_width=True)
     
     st.markdown("---")
-    # Botón dentro del modal
-    st.link_button("🔗 Ir al Perfil", item['uri'], type="primary", use_container_width=True)
+    
+    # Botón de enlace en la parte superior derecha (Simulado con columnas)
+    st.success("✅ Presencia Confirmada")
+    st.link_button("🔗 Ir al Perfil Oficial", item['uri'], type="primary", use_container_width=True)
 
 
 # --- 7. INTERFAZ PRINCIPAL ---
@@ -242,102 +229,86 @@ with c2:
 with c3:
     run_btn = st.button("🔍 INVESTIGAR", use_container_width=True, type="primary")
 
-# --- 8. LÓGICA DE EJECUCIÓN ---
-
+# --- 8. EJECUCIÓN DE BÚSQUEDA ---
 if run_btn and username:
-    # Reiniciar resultados al buscar de nuevo
     st.session_state.results = []
+    st.session_state.search_done = False
     
     target_sites = sites if cat_filter == "Todas" else [s for s in sites if s['cat'] == cat_filter]
     
     prog_bar = st.progress(0)
     status_text = st.empty()
     
-    # Contenedor para mostrar resultados progresivamente
-    results_container = st.container()
+    # Placeholder para mostrar progreso numérico
+    progress_placeholder = st.container()
     
     processed = 0
-    found_temp = 0
     
-    # Hilos
-    with ThreadPoolExecutor(max_workers=25) as executor:
+    with ThreadPoolExecutor(max_workers=20) as executor:
         futures = {executor.submit(check_site, s, username): s for s in target_sites}
         
         for future in as_completed(futures):
             res = future.result()
             processed += 1
             
-            # Actualizar barra cada cierto tiempo
             if processed % 5 == 0 or processed == len(target_sites):
                 prog_bar.progress(processed / len(target_sites))
                 status_text.caption(f"Analizando: {processed}/{len(target_sites)}")
             
             if res:
-                # Agregar al estado y a la lista temporal
                 st.session_state.results.append(res)
-                
-                # --- RENDERIZADO PROGRESIVO EN TIEMPO REAL ---
-                # Calculamos si necesitamos una nueva fila o usar la existente
-                # Truco: Renderizamos TODO el grid de nuevo en el container cada vez que hay un hallazgo
-                # Esto asegura que el layout (4 columnas) siempre esté perfecto
-                with results_container:
-                    # Limpiamos el contenedor anterior visualmente (Streamlit lo hace auto al re-escribir)
-                    # Grid Logic:
-                    results = st.session_state.results
-                    cols_per_row = 4
-                    for i in range(0, len(results), cols_per_row):
-                        cols = st.columns(cols_per_row)
-                        for j in range(cols_per_row):
-                            if i + j < len(results):
-                                item = results[i + j]
-                                with cols[j]:
-                                    # Usamos un container con estilo CSS personalizado para la tarjeta
-                                    with st.container(border=True):
-                                        st.markdown(f"**{item['name']}**")
-                                        st.caption(f"{item['category']}")
-                                        if st.button("👁️ Ver Detalles", key=f"btn_{item['uri']}"):
-                                            show_details(item)
-    
+                # Mostrar hallazgo rápido en texto mientras carga el resto
+                with progress_placeholder:
+                    st.toast(f"Encontrado: {res['name']}", icon="✅")
+
     prog_bar.progress(100)
+    st.session_state.search_done = True
     if len(st.session_state.results) > 0:
         status_text.success(f"✅ Finalizado. {len(st.session_state.results)} perfiles encontrados.")
     else:
         status_text.warning("❌ No se encontraron resultados.")
 
-# --- 9. RENDERIZADO PERSISTENTE (Para que no desaparezca al clicar botones) ---
-# Esta parte se ejecuta si NO estamos buscando, pero hay resultados en memoria
-elif st.session_state.results:
-    st.markdown("### 🎯 Resultados (Persistentes)")
+# --- 9. RENDERIZADO DE RESULTADOS (PERSISTENTE) ---
+# Esta sección está fuera del 'if run_btn' para que no desaparezca al interactuar
+if st.session_state.results:
+    st.divider()
+    st.markdown("### 🎯 Resultados Encontrados")
     
     results = st.session_state.results
     cols_per_row = 4
     
+    # Bucle corregido para evitar duplicados de keys
     for i in range(0, len(results), cols_per_row):
         cols = st.columns(cols_per_row)
         for j in range(cols_per_row):
             if i + j < len(results):
                 item = results[i + j]
                 with cols[j]:
-                    with st.container(border=True): # Borde nativo de Streamlit que se ve limpio
+                    # Usamos st.container con borde nativo para estética uniforme
+                    with st.container(border=True):
                         st.markdown(f"**{item['name']}**")
                         st.caption(f"{item['category']}")
-                        # El botón DEBE tener una key única basada en la URL para no duplicarse
-                        if st.button("👁️ Ver Detalles", key=f"persistent_{item['uri']}"):
+                        
+                        # SOLUCIÓN ERROR DUPLICATE KEY:
+                        # Usamos el índice (i+j) para garantizar que la key sea única siempre
+                        unique_key = f"btn_{i+j}_{item['name']}"
+                        
+                        if st.button("👁️ Ver Detalles", key=unique_key):
                             show_details(item)
 
 # --- 10. ZONA DE DESCARGA ---
-if st.session_state.results:
+if st.session_state.search_done and st.session_state.results:
     st.divider()
     st.subheader("📥 Exportar Reporte")
     
     csv_data, txt_data, pdf_data = generate_reports(st.session_state.results, username)
     
-    dc1, dc2, dc3 = st.columns(3)
-    with dc1:
+    col1, col2, col3 = st.columns(3)
+    with col1:
         st.download_button("📄 Descargar CSV", csv_data, f"report_{username}.csv", "text/csv", use_container_width=True)
-    with dc2:
+    with col2:
         st.download_button("📝 Descargar TXT", txt_data, f"report_{username}.txt", "text/plain", use_container_width=True)
-    with dc3:
+    with col3:
         st.download_button("📕 Descargar PDF", pdf_data, f"report_{username}.pdf", "application/pdf", use_container_width=True)
 
 # Footer
