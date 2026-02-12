@@ -6,7 +6,6 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import io
 from bs4 import BeautifulSoup
 import dns.resolver
-import re
 from email_validator import validate_email, EmailNotValidError
 import urllib.parse
 
@@ -200,7 +199,6 @@ def analyze_email(email):
         else: results['gravatar'] = {'found': False}
     except: results['gravatar'] = {'found': False}
 
-    # Duolingo Check
     try:
         r = requests.get(f"https://www.duolingo.com/2017-06-30/users?email={email}", headers=get_headers(), timeout=5)
         if r.status_code == 200 and r.json()['users']:
@@ -210,60 +208,100 @@ def analyze_email(email):
 
     return results
 
-# --- 6. GENERADORES DE ARCHIVOS (CORREGIDO) ---
+# --- 6. GENERADORES DE ARCHIVOS (CORREGIDO Y RESTAURADO) ---
+WMN_DATA_URL = "https://raw.githubusercontent.com/WebBreacher/WhatsMyName/main/wmn-data.json"
+APP_URL = "https://whatsmyname.streamlit.app/"
+
 def clean_text(text):
     if not isinstance(text, str): return str(text)
     return text.encode('latin-1', 'replace').decode('latin-1')
+
+# --- CLASE PDF PERSONALIZADA CON CABECERA Y PIE ---
+class PDFReport(FPDF):
+    def header(self):
+        self.set_font('Arial', 'B', 15)
+        # Cabecera restaurada
+        self.cell(0, 10, clean_text('Reporte SOCMINT - WhatsMyName Web'), 0, 1, 'C')
+        self.ln(5)
+
+    def footer(self):
+        self.set_y(-25) # Espacio para 3 líneas
+        self.set_font('Arial', 'I', 8)
+        # Línea 1: Autor y Herramienta
+        self.cell(0, 5, clean_text('Herramienta: WhatsMyName Web | Autor: Manuel Travezaño'), 0, 1, 'C')
+        
+        # Línea 2: Enlace Web (Azul)
+        self.set_text_color(0, 0, 255)
+        self.cell(0, 5, APP_URL, 0, 1, 'C', link=APP_URL)
+        
+        # Línea 3: Paginación (Negro)
+        self.set_text_color(0, 0, 0)
+        self.cell(0, 5, f'Pagina {self.page_no()}', 0, 0, 'C')
 
 def generate_files(results, target):
     # 1. CSV
     df = pd.DataFrame(results)
     csv = df.drop(columns=['details', 'image'], errors='ignore').to_csv(index=False).encode('utf-8')
     
-    # 2. TXT
+    # 2. TXT (Restaurado)
     txt = io.StringIO()
-    txt.write(f"REPORTE DE INVESTIGACION - USUARIO: {target}\n")
+    txt.write(f"REPORTE DE INVESTIGACION SOCMINT\n")
+    txt.write(f"Usuario Investigado: {target}\n")
     txt.write(f"Herramienta: {APP_URL}\n")
     txt.write("="*60 + "\n\n")
     for item in results:
-        txt.write(f"Plataforma: {item['name']}\nURL: {item['uri']}\n")
+        txt.write(f"Plataforma: {item['name']}\n")
+        txt.write(f"URL: {item['uri']}\n")
+        txt.write(f"Categoria: {item['category']}\n")
         if item.get('details'):
-            for k, v in item['details'].items(): txt.write(f"  - {k}: {v}\n")
+            txt.write("Detalles Extraidos:\n")
+            for k, v in item['details'].items():
+                txt.write(f"  - {k}: {v}\n")
         txt.write("-" * 20 + "\n")
     
-    # 3. PDF (Simplificado para evitar errores)
+    # 3. PDF (Restaurado con PDFReport)
     pdf_bytes = None
     try:
-        pdf = FPDF()
+        # ¡AQUÍ ESTABA EL ERROR! Ahora usamos la clase personalizada PDFReport
+        pdf = PDFReport() 
         pdf.add_page()
         pdf.set_font("Arial", size=10)
-        pdf.cell(0, 10, clean_text(f"Reporte: {target}"), ln=1)
-        pdf.ln(5)
         
-        pdf.set_font("Arial", 'B', 10)
-        pdf.cell(60, 10, clean_text("Plataforma"), 1)
-        pdf.cell(130, 10, clean_text("Enlace"), 1)
-        pdf.ln()
+        # Información del Objetivo al inicio
+        pdf.cell(0, 10, clean_text(f"Usuario Investigado: {target}"), ln=1)
+        pdf.cell(0, 10, f"Total Hallazgos: {len(results)}", ln=1)
+        pdf.ln(10)
         
+        # Encabezados de Tabla
+        pdf.set_fill_color(240, 240, 240)
+        pdf.set_font("Arial", 'B', 9)
+        pdf.cell(50, 8, clean_text("Plataforma"), 1, 0, 'L', 1)
+        pdf.cell(40, 8, clean_text("Categoría"), 1, 0, 'L', 1)
+        pdf.cell(100, 8, clean_text("Enlace"), 1, 1, 'L', 1)
+        
+        # Filas
         pdf.set_font("Arial", size=9)
         for item in results:
-            pdf.cell(60, 10, clean_text(item['name'][:30]), 1)
-            # Enlace clickeable
+            name = clean_text(item['name'][:25])
+            cat = clean_text(item['category'][:20])
+            
+            pdf.cell(50, 8, name, 1)
+            pdf.cell(40, 8, cat, 1)
+            
+            # Enlace limpio y clickeable
             pdf.set_text_color(0, 0, 255)
-            pdf.cell(130, 10, clean_text("Enlace al perfil"), 1, 0, link=item['uri'])
+            pdf.cell(100, 8, clean_text("Ir al perfil"), 1, 0, link=item['uri'])
             pdf.set_text_color(0, 0, 0)
             pdf.ln()
             
         pdf_bytes = pdf.output(dest='S').encode('latin-1', 'ignore')
     except Exception as e:
-        print(f"PDF Error: {e}") # Log interno
+        print(f"Error PDF: {e}")
+        pdf_bytes = None
         
     return csv, txt.getvalue(), pdf_bytes
 
 # --- 7. INTERFAZ ---
-WMN_DATA_URL = "https://raw.githubusercontent.com/WebBreacher/WhatsMyName/main/wmn-data.json"
-APP_URL = "https://whatsmyname.streamlit.app/"
-
 @st.cache_data
 def load_sites():
     try: return requests.get(WMN_DATA_URL).json()['sites']
@@ -273,8 +311,10 @@ with st.sidebar:
     try: st.image("https://manuelbot59.com/images/FirmaManuelBot59.png", use_column_width=True)
     except: st.header("ManuelBot59")
     st.markdown("### 📌 Navegación")
-    st.markdown("- [🏠 Inicio](https://manuelbot59.com/)")
-    st.markdown("- [🕵️ OSINT](https://manuelbot59.com/osint/)")
+    st.markdown("""
+    - [🏠 Inicio](https://manuelbot59.com/)
+    - [🕵️ OSINT](https://manuelbot59.com/osint/)
+    """)
     st.markdown("---")
     st.markdown("### 📞 Soporte")
     st.markdown("📧 **Email:** ManuelBot@proton.me")
@@ -287,7 +327,6 @@ tab1, tab2 = st.tabs(["👤 Búsqueda de Usuario", "📧 Análisis de Correo"])
 # TAB 1
 with tab1:
     st.markdown("### 🔎 Rastreador de Huella Digital")
-    # BARRA DE PROGRESO ARRIBA
     progress_placeholder = st.empty()
     
     sites = load_sites()
@@ -335,16 +374,12 @@ with tab1:
                                         st.markdown(f"<span class='site-cat'>{item['category']}</span>", unsafe_allow_html=True)
                                         st.link_button("🔗 Visitar", item['uri'], use_container_width=True)
                                     if item.get('details'):
-                                        with st.expander("👁️ Ver Detalles Extraídos"):
-                                            d1, d2 = st.columns([1, 2])
-                                            with d1: st.image(item['image'], use_column_width=True)
-                                            with d2:
-                                                for k, v in item['details'].items():
-                                                    st.markdown(f"**{k}:** {v}")
+                                        with st.expander("Detalles"):
+                                            for k, v in item['details'].items():
+                                                st.markdown(f"**{k}:** {v}")
         
         prog_bar.progress(100)
     
-    # MOSTRAR BOTONES DE DESCARGA SI HAY RESULTADOS
     if st.session_state.results:
         st.divider()
         st.subheader("📥 Exportar Reporte")
@@ -379,7 +414,6 @@ with tab2:
                     g = data['gravatar']
                     st.image(g['image'], width=80)
                     st.write(f"**Nombre:** {g['name']}")
-                
                 if data.get('duolingo'):
                     st.success("✅ Duolingo Detectado")
                     d = data['duolingo']
@@ -393,7 +427,7 @@ with tab2:
             links = [
                 ("Duolingo", f"https://www.duolingo.com/2017-06-30/users?email={email_in}"),
                 ("Spotify", f"https://spclient.wg.spotify.com/signup/public/v1/account?validate=1&email={email_in}"),
-                ("Twitter", f"https://api.twitter.com/i/users/email_available.json?email={email_in}"),
+                ("Twitter API", f"https://api.twitter.com/i/users/email_available.json?email={email_in}"),
                 ("HaveIBeenPwned", f"https://haveibeenpwned.com/account/{email_in}"),
                 ("Intelx", f"https://intelx.io/?s={encoded_email}"),
                 ("GitHub Commits", f"https://github.com/search?q=committer-email:{email_in}&type=commits")
