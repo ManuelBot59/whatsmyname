@@ -13,10 +13,16 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# --- 2. ESTILOS CSS PROFESIONALES (Tarjetas Uniformes) ---
+# --- 2. GESTIÓN DEL ESTADO (MEMORIA) ---
+# Esto evita que se borre todo al dar clic en un botón
+if "results" not in st.session_state:
+    st.session_state.results = []
+if "is_searching" not in st.session_state:
+    st.session_state.is_searching = False
+
+# --- 3. ESTILOS CSS CORREGIDOS ---
 st.markdown("""
 <style>
-    /* Ocultar elementos nativos */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     header {visibility: hidden;}
@@ -26,7 +32,6 @@ st.markdown("""
         color: #333;
     }
 
-    /* Títulos */
     h1 {
         background: linear-gradient(45deg, #1c3961, #0066a9);
         -webkit-background-clip: text;
@@ -37,31 +42,43 @@ st.markdown("""
         padding-top: 1rem;
     }
 
-    /* ESTILO DE TARJETAS (Uniformidad) */
-    div[data-testid="stColumn"] {
+    /* ESTILO DE LA TARJETA (Uniformidad) */
+    /* Aplicamos el estilo a un contenedor personalizado, no a la columna entera */
+    .custom-card {
         background-color: white;
-        border-radius: 10px;
-        padding: 15px;
+        border-radius: 12px;
+        padding: 20px;
         box-shadow: 0 4px 6px rgba(0,0,0,0.05);
         border: 1px solid #e0e0e0;
-        transition: transform 0.2s;
-        min-height: 220px; /* Altura fija mínima para uniformidad */
+        border-left: 5px solid #27ae60;
+        height: 250px; /* Altura fija para que todos sean iguales */
         display: flex;
         flex-direction: column;
         justify-content: space-between;
+        margin-bottom: 15px;
+        transition: transform 0.2s;
     }
-    
-    div[data-testid="stColumn"]:hover {
+    .custom-card:hover {
         transform: translateY(-5px);
         box-shadow: 0 10px 15px rgba(0,0,0,0.1);
         border-color: #00c6fb;
     }
 
-    /* Ajuste de botones dentro de columnas */
-    div.stButton > button {
-        width: 100%;
-        border-radius: 6px;
-        font-weight: 600;
+    .card-title {
+        font-weight: bold;
+        font-size: 1.1rem;
+        color: #1c3961;
+        margin-bottom: 5px;
+    }
+    
+    .card-cat {
+        font-size: 0.8rem;
+        background: #f0f2f5;
+        padding: 2px 8px;
+        border-radius: 4px;
+        color: #666;
+        display: inline-block;
+        margin-bottom: 10px;
     }
 
     /* Footer */
@@ -81,9 +98,9 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# --- 3. LÓGICA DE BÚSQUEDA ---
+# --- 4. FUNCIONES Y LÓGICA ---
 WMN_DATA_URL = "https://raw.githubusercontent.com/WebBreacher/WhatsMyName/main/wmn-data.json"
-APP_URL = "https://whatsmyname.streamlit.app/" # Tu enlace para los reportes
+APP_URL = "https://whatsmyname.streamlit.app/" 
 
 @st.cache_data
 def load_sites():
@@ -119,25 +136,7 @@ def check_site(site, username):
         return None
     return None
 
-# --- 4. VENTANA EMERGENTE (MODAL) ---
-@st.dialog("Detalles Extraídos")
-def show_details(item):
-    # Cabecera
-    st.markdown(f"### {item['name']}")
-    st.caption(f"Categoría: {item['category']}")
-    st.markdown("---")
-    
-    # Imagen al 60%
-    c1, c2, c3 = st.columns([1, 3, 1])
-    with c2:
-        st.image(item['image'], caption="Evidencia Visual", use_column_width=True)
-    
-    st.markdown("---")
-    
-    # Botón de enlace (Parte superior derecha visualmente ajustada en el flujo)
-    st.link_button("🔗 Ir al Perfil", item['uri'], type="primary", use_container_width=True)
-
-# --- 5. REPORTES (PDF, CSV, TXT) ---
+# --- 5. CLASE PDF (PIE DE PÁGINA PERSONALIZADO) ---
 class PDFReport(FPDF):
     def header(self):
         self.set_font('Arial', 'B', 15)
@@ -145,25 +144,31 @@ class PDFReport(FPDF):
         self.ln(5)
 
     def footer(self):
-        self.set_y(-15)
+        self.set_y(-25) # Un poco más arriba
         self.set_font('Arial', 'I', 8)
-        # PIE DE PÁGINA CON ENLACE
-        self.cell(0, 10, f'Generado en: {APP_URL} | Pagina {self.page_no()}', 0, 0, 'C')
+        # Nombre y Herramienta
+        self.cell(0, 5, f'Herramienta: WhatsMyName Web | Autor: Manuel Travezano', 0, 1, 'C')
+        # Enlace clickeable (aunque visualmente es texto en FPDF básico, ponemos la URL)
+        self.set_text_color(0, 0, 255)
+        self.cell(0, 5, APP_URL, 0, 1, 'C', link=APP_URL)
+        self.set_text_color(0, 0, 0)
+        self.cell(0, 5, f'Pagina {self.page_no()}', 0, 0, 'C')
 
 def generate_reports(results, username):
-    # 1. CSV
+    # CSV
     df = pd.DataFrame(results)
     csv = df.to_csv(index=False).encode('utf-8')
     
-    # 2. TXT
+    # TXT
     txt_buffer = io.StringIO()
     txt_buffer.write(f"REPORTE DE INVESTIGACION - USUARIO: {username}\n")
-    txt_buffer.write(f"Herramienta: WhatsMyName Web\nEnlace: {APP_URL}\n")
+    txt_buffer.write(f"Autor: Manuel Travezano\n")
+    txt_buffer.write(f"Herramienta: {APP_URL}\n")
     txt_buffer.write("="*50 + "\n\n")
     for item in results:
         txt_buffer.write(f"Sitio: {item['name']}\nURL: {item['uri']}\nCategoria: {item['category']}\n{'-'*30}\n")
     
-    # 3. PDF
+    # PDF
     pdf = PDFReport()
     pdf.add_page()
     pdf.set_font("Arial", size=10)
@@ -191,7 +196,25 @@ def generate_reports(results, username):
     
     return csv, txt_buffer.getvalue(), pdf_bytes
 
-# --- 6. INTERFAZ PRINCIPAL ---
+# --- 6. MODAL ---
+@st.dialog("Detalles Extraídos")
+def show_details(item):
+    st.caption("PLATAFORMA")
+    st.subheader(item['name'])
+    st.caption(f"Categoría: {item['category']}")
+    st.markdown("---")
+    
+    # Imagen al 60%
+    c1, c2, c3 = st.columns([1, 3, 1])
+    with c2:
+        st.image(item['image'], caption="Evidencia", use_column_width=True)
+    
+    st.markdown("---")
+    # Botón dentro del modal
+    st.link_button("🔗 Ir al Perfil", item['uri'], type="primary", use_container_width=True)
+
+
+# --- 7. INTERFAZ PRINCIPAL ---
 
 with st.sidebar:
     st.image("https://manuelbot59.com/images/FirmaManuelBot59.png", use_column_width=True)
@@ -219,83 +242,95 @@ with c2:
 with c3:
     run_btn = st.button("🔍 INVESTIGAR", use_container_width=True, type="primary")
 
-# Estado de la sesión para resultados
-if "results_list" not in st.session_state:
-    st.session_state.results_list = []
+# --- 8. LÓGICA DE EJECUCIÓN ---
 
 if run_btn and username:
-    st.session_state.results_list = [] # Limpiar
+    # Reiniciar resultados al buscar de nuevo
+    st.session_state.results = []
+    
     target_sites = sites if cat_filter == "Todas" else [s for s in sites if s['cat'] == cat_filter]
     
-    # Barra de progreso
     prog_bar = st.progress(0)
     status_text = st.empty()
     
-    # --- ÁREA DE RESULTADOS (GRID PROGRESIVO) ---
-    st.markdown("### 🎯 Resultados en Tiempo Real")
-    
-    # Contenedor principal para ir añadiendo filas
+    # Contenedor para mostrar resultados progresivamente
     results_container = st.container()
     
-    # Variables de control para el grid
-    current_row_cols = [] 
-    
     processed = 0
-    found_count = 0
+    found_temp = 0
     
-    # Ejecutor
-    with ThreadPoolExecutor(max_workers=20) as executor:
+    # Hilos
+    with ThreadPoolExecutor(max_workers=25) as executor:
         futures = {executor.submit(check_site, s, username): s for s in target_sites}
         
-        # Iteramos conforme se completan las tareas
         for future in as_completed(futures):
             res = future.result()
             processed += 1
             
-            # Actualizar barra (cada 5 para rendimiento)
+            # Actualizar barra cada cierto tiempo
             if processed % 5 == 0 or processed == len(target_sites):
                 prog_bar.progress(processed / len(target_sites))
                 status_text.caption(f"Analizando: {processed}/{len(target_sites)}")
             
             if res:
-                found_count += 1
-                st.session_state.results_list.append(res)
+                # Agregar al estado y a la lista temporal
+                st.session_state.results.append(res)
                 
-                # --- LÓGICA DE GRID PROGRESIVO ---
-                # Si no tenemos columnas activas o ya llenamos las 4, creamos nuevas
-                if not current_row_cols or len(current_row_cols) >= 4:
-                    with results_container:
-                        current_row_cols = st.columns(4)
-                
-                # Seleccionamos la columna libre actual
-                # (found_count - 1) % 4 nos da el índice 0, 1, 2, 3
-                col_idx = (found_count - 1) % 4
-                col = current_row_cols[col_idx]
-                
-                # Renderizamos la tarjeta en esa columna
-                with col:
-                    st.markdown(f"**✅ {res['name']}**")
-                    st.caption(f"Cat: {res['category']}")
-                    
-                    # Botón 1: Ver Detalles (Modal)
-                    if st.button("👁️ Ver Detalles", key=f"det_{res['uri']}"):
-                        show_details(res)
-                    
-                    # Botón 2: Enlace Directo (Estilo nativo)
-                    st.link_button("🔗 Ir al Sitio", res['uri'])
-
-    prog_bar.empty()
-    if found_count > 0:
-        status_text.success(f"✅ Finalizado. {found_count} perfiles encontrados.")
+                # --- RENDERIZADO PROGRESIVO EN TIEMPO REAL ---
+                # Calculamos si necesitamos una nueva fila o usar la existente
+                # Truco: Renderizamos TODO el grid de nuevo en el container cada vez que hay un hallazgo
+                # Esto asegura que el layout (4 columnas) siempre esté perfecto
+                with results_container:
+                    # Limpiamos el contenedor anterior visualmente (Streamlit lo hace auto al re-escribir)
+                    # Grid Logic:
+                    results = st.session_state.results
+                    cols_per_row = 4
+                    for i in range(0, len(results), cols_per_row):
+                        cols = st.columns(cols_per_row)
+                        for j in range(cols_per_row):
+                            if i + j < len(results):
+                                item = results[i + j]
+                                with cols[j]:
+                                    # Usamos un container con estilo CSS personalizado para la tarjeta
+                                    with st.container(border=True):
+                                        st.markdown(f"**{item['name']}**")
+                                        st.caption(f"{item['category']}")
+                                        if st.button("👁️ Ver Detalles", key=f"btn_{item['uri']}"):
+                                            show_details(item)
+    
+    prog_bar.progress(100)
+    if len(st.session_state.results) > 0:
+        status_text.success(f"✅ Finalizado. {len(st.session_state.results)} perfiles encontrados.")
     else:
         status_text.warning("❌ No se encontraron resultados.")
 
-# --- ZONA DE DESCARGA (Solo si hay resultados) ---
-if st.session_state.results_list:
+# --- 9. RENDERIZADO PERSISTENTE (Para que no desaparezca al clicar botones) ---
+# Esta parte se ejecuta si NO estamos buscando, pero hay resultados en memoria
+elif st.session_state.results:
+    st.markdown("### 🎯 Resultados (Persistentes)")
+    
+    results = st.session_state.results
+    cols_per_row = 4
+    
+    for i in range(0, len(results), cols_per_row):
+        cols = st.columns(cols_per_row)
+        for j in range(cols_per_row):
+            if i + j < len(results):
+                item = results[i + j]
+                with cols[j]:
+                    with st.container(border=True): # Borde nativo de Streamlit que se ve limpio
+                        st.markdown(f"**{item['name']}**")
+                        st.caption(f"{item['category']}")
+                        # El botón DEBE tener una key única basada en la URL para no duplicarse
+                        if st.button("👁️ Ver Detalles", key=f"persistent_{item['uri']}"):
+                            show_details(item)
+
+# --- 10. ZONA DE DESCARGA ---
+if st.session_state.results:
     st.divider()
     st.subheader("📥 Exportar Reporte")
     
-    csv_data, txt_data, pdf_data = generate_reports(st.session_state.results_list, username)
+    csv_data, txt_data, pdf_data = generate_reports(st.session_state.results, username)
     
     dc1, dc2, dc3 = st.columns(3)
     with dc1:
