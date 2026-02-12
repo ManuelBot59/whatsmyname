@@ -43,10 +43,10 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.0/socket.io.js"></script>
 
     <style>
-        /* Ajustes básicos para mantener la coherencia */
+        /* Ajustes básicos */
         body { margin: 0; font-family: 'Raleway', sans-serif; background-color: #f4f7f6; }
         
-        /* HEADER STYLES (Copiados para asegurar visualización correcta sin depender del CSS externo para estructura crítica) */
+        /* HEADER STYLES */
         .main-header .container { display: flex; justify-content: space-between; align-items: center; padding: 3px; max-width: 1200px; margin: 0 auto; }
         .logo-wrap img { max-width: 100%; height: auto; }
         .desktop-menu { display: flex; align-items: center; margin-left: 40px; }
@@ -55,20 +55,10 @@
         .top-header { background-color: #1c3961; color: white; padding: 10px 0; }
         .top-header a { color: white; text-decoration: none; margin-right: 15px; }
         
-        /* === ESTILOS DE LA HERRAMIENTA WMN (Adaptados a Tema Claro/Profesional) === */
+        /* === ESTILOS DE LA HERRAMIENTA WMN === */
         .wmn-wrapper {
             padding: 60px 0;
             min-height: 80vh;
-        }
-        
-        .wmn-title {
-            text-align: center;
-            font-size: 3rem;
-            margin-bottom: 10px;
-            background: linear-gradient(45deg, #1c3961, #0066a9);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            font-weight: 700;
         }
         
         .wmn-subtitle {
@@ -283,7 +273,10 @@
 
     <main class="container wmn-wrapper">
         
-        <h1 class="wmn-title">WhatsMyName Web</h1>
+        <h2 style="font-size: 3.4rem; margin-bottom: 3rem; background: linear-gradient(45deg, #005bea, #00c6fb); -webkit-background-clip: text; -webkit-text-fill-color: transparent; text-align: center; width: fit-content; margin: 0 auto;">
+            WhatsMyName Web
+        </h2>
+        
         <p class="wmn-subtitle">Buscador avanzado de nombres de usuario en +500 sitios web</p>
 
         <div class="search-box-container">
@@ -336,7 +329,9 @@
             </div>
             <div class="footer-col">
                 <h3 style="border-bottom: 2px solid #0066a9; padding-bottom: 10px; margin-bottom: 20px;">Enlaces de Interés</h3>
-                <p><a href="https://linktr.ee/proyectosmanuelbot" style="color: #ccc; text-decoration: none;">Cursos Gratuitos</a></p>
+                
+                <p><a href="https://manuelbot59.com/formacion/" style="color: #ccc; text-decoration: none;">Cursos Gratuitos</a></p>
+                
                 <p><a href="https://manuelbot59.com/osint/" style="color: #ccc; text-decoration: none;">Directorio OSINT</a></p>
             </div>
         </div>
@@ -349,7 +344,10 @@
 
     <script>
         $(document).ready(function() {
-            // Conexión Socket (Asegúrate de que esta lógica coincida con tu backend en Render)
+            // ==========================================================
+            // CONFIGURA AQUÍ TU URL DE RENDER SI ES NECESARIO
+            // Ejemplo: const socket = io("https://tu-proyecto.onrender.com");
+            // ==========================================================
             const socket = io(); 
             
             function loadCategories(categories) {
