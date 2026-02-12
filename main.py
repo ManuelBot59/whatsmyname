@@ -1,3 +1,12 @@
+# --- INICIO DEL ARCHIVO main.py ---
+from gevent import monkey
+monkey.patch_all()
+
+# AHORA sí importamos el resto
+from flask import Flask, render_template, request
+from flask_socketio import SocketIO, emit
+import requests
+import os
 from flask import Flask, render_template, request
 from flask_socketio import SocketIO, emit
 from socid_extractor import extract
