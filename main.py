@@ -78,7 +78,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# --- 4. MOTORES DE EXTRACCIÓN ---
+# --- 4. MOTORES DE EXTRACCIÓN MEJORADOS ---
 def get_headers():
     return {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'}
 
@@ -101,20 +101,23 @@ def extract_telegram(username):
     except:
         return {}, None
 
-# --- NUEVO EXTRACTOR GITLAB ---
+# --- EXTRACTOR GITLAB COMPLETO ---
 def extract_gitlab(username):
     try:
-        # GitLab API devuelve una lista, buscamos por username exacto
+        # Buscamos por username exacto en la API
         r = requests.get(f"https://gitlab.com/api/v4/users?username={username}", headers=get_headers(), timeout=5)
         if r.status_code == 200:
             data_list = r.json()
             if data_list and len(data_list) > 0:
-                user = data_list[0] # Tomamos el primer resultado
+                user = data_list[0]
+                # Mapeo exacto de los campos solicitados
                 details = {
                     "ID": user.get("id"),
                     "Username": user.get("username"),
                     "Nombre": user.get("name"),
+                    "Email Público": user.get("public_email", "No público"),
                     "Estado": user.get("state"),
+                    "Bloqueado": str(user.get("locked")), # Convertir bool a str
                     "Web URL": user.get("web_url")
                 }
                 return {k: v for k, v in details.items() if v}, user.get("avatar_url")
@@ -122,21 +125,23 @@ def extract_gitlab(username):
         pass
     return {}, None
 
-# --- EXTRACTOR GITHUB MEJORADO ---
+# --- EXTRACTOR GITHUB COMPLETO ---
 def extract_github(username):
     try:
         r = requests.get(f"https://api.github.com/users/{username}", headers=get_headers(), timeout=5)
         if r.status_code == 200:
             data = r.json()
-            # Mapeo completo de campos solicitados
+            # Mapeo exacto de los campos solicitados
             details = {
                 "ID": data.get("id"),
+                "Node ID": data.get("node_id"),
+                "Tipo": data.get("type"),
                 "Nombre": data.get("name"),
-                "Bio": data.get("bio"),
-                "Compañía": data.get("company"),
+                "Empresa": data.get("company"),
                 "Blog": data.get("blog"),
                 "Ubicación": data.get("location"),
                 "Email": data.get("email"),
+                "Bio": data.get("bio"),
                 "Twitter": data.get("twitter_username"),
                 "Repos Públicos": data.get("public_repos"),
                 "Seguidores": data.get("followers"),
@@ -172,8 +177,11 @@ def extract_generic_meta(url):
     except:
         return {}, None
 
+# --- LÓGICA DE DETECCIÓN INTELIGENTE ---
 def check_site(site, username):
     uri = site['uri_check'].format(account=username)
+    
+    # 1. Validación de existencia
     try:
         r = requests.get(uri, headers=get_headers(), timeout=6)
         if r.status_code != site['e_code']: return None
@@ -185,12 +193,17 @@ def check_site(site, username):
     image_url = None
     site_name = site['name'].lower()
     
-    # Enrutamiento de extractores (AÑADIDO GITLAB)
-    if "telegram" in site_name: details, image_url = extract_telegram(username)
-    elif "github" in site_name: details, image_url = extract_github(username)
-    elif "gitlab" in site_name: details, image_url = extract_gitlab(username) # <--- GitLab Integrado
-    elif "gravatar" in site_name: details, image_url = extract_gravatar(username)
+    # Enrutamiento de extractores (Case insensitive)
+    if "telegram" in site_name: 
+        details, image_url = extract_telegram(username)
+    elif "github" in site_name: 
+        details, image_url = extract_github(username)
+    elif "gitlab" in site_name: 
+        details, image_url = extract_gitlab(username)
+    elif "gravatar" in site_name: 
+        details, image_url = extract_gravatar(username)
     else:
+        # Extracción genérica + socid
         details, image_url = extract_generic_meta(uri)
         if not details and socid_extract:
             try:
@@ -200,13 +213,21 @@ def check_site(site, username):
                     image_url = data.get('image')
             except: pass
 
+    # Fallback de imagen
     if not image_url:
         try:
             domain = uri.split('/')[2]
             image_url = f"https://www.google.com/s2/favicons?domain={domain}&sz=128"
-        except: image_url = "https://via.placeholder.com/128?text=Found"
+        except: 
+            image_url = "https://via.placeholder.com/128?text=Found"
 
-    return {"name": site['name'], "uri": uri, "category": site['cat'], "image": image_url, "details": details}
+    return {
+        "name": site['name'],
+        "uri": uri,
+        "category": site['cat'],
+        "image": image_url,
+        "details": details
+    }
 
 # --- 5. MÓDULO DE CORREO ---
 def analyze_email(email):
@@ -270,7 +291,7 @@ class PDFReport(FPDF):
         self.cell(0, 5, f'Pagina {self.page_no()}', 0, 0, 'C')
 
 def generate_files(results, target):
-    # Generar Fecha con Zona Horaria Local
+    # Timestamp con Zona Horaria Local
     now = datetime.now().astimezone() 
     timestamp_display = now.strftime("%d/%m/%Y %H:%M:%S (GMT%z)")
     timestamp_filename = now.strftime("%Y%m%d_%H%M%S")
@@ -326,8 +347,7 @@ def generate_files(results, target):
             pdf.ln()
             
         pdf_bytes = pdf.output(dest='S').encode('latin-1', 'ignore')
-    except Exception as e:
-        print(f"Error PDF: {e}")
+    except:
         pdf_bytes = None
         
     return csv, txt.getvalue(), pdf_bytes, timestamp_filename
@@ -404,6 +424,7 @@ with tab1:
                                         st.markdown(f"<div class='site-title'>{item['name']}</div>", unsafe_allow_html=True)
                                         st.markdown(f"<span class='site-cat'>{item['category']}</span>", unsafe_allow_html=True)
                                         st.link_button("🔗 Visitar", item['uri'], use_container_width=True)
+                                        # Eliminado el texto de URL duplicado aquí
                                     
                                     if item.get('details'):
                                         with st.expander("👁️ Ver Detalles Extraídos"):
@@ -413,8 +434,6 @@ with tab1:
                                             with dc2:
                                                 for k, v in item['details'].items():
                                                     st.markdown(f"**{k}:** {v}")
-                                    else:
-                                        st.caption(f"URL: {item['uri']}")
         
         prog_bar.progress(100)
     
