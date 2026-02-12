@@ -1,420 +1,322 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="en">
 <head>
-    <script async src="https://www.googletagmanager.com/gtag/js?id=G-VQP42MP5RY"></script>
-    <script>
-    window.dataLayer = window.dataLayer || [];
-    function gtag(){dataLayer.push(arguments);}
-    gtag('js', new Date());
-
-    gtag('config', 'G-VQP42MP5RY');
-    </script>
     <meta charset="UTF-8">
-    <title>Herramienta WhatsMyName | Manuel Travezaño OSINT</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="description" content="Herramienta profesional de búsqueda de nombres de usuario (Username Enumeration) potenciada por Manuel Travezaño.">
-    
-    <link href="https://fonts.googleapis.com/css?family=Raleway:400,500,600,700" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WhatsMyName Web</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.0/socket.io.js"></script>
-
     <style>
-        /* --- ESTILOS BASE DE MANUELBOT59.COM --- */
-        body { margin: 0; font-family: 'Raleway', sans-serif; background-color: #f4f7f6; color: #333; }
-        a { text-decoration: none; color: inherit; }
-        ul { list-style: none; padding: 0; margin: 0; }
-        
-        /* Header Container */
-        .main-header { background: #fff; box-shadow: 0 2px 10px rgba(0,0,0,0.05); position: relative; z-index: 1000; }
-        .main-header .container { display: flex; justify-content: space-between; align-items: center; max-width: 1200px; margin: 0 auto; padding: 10px 20px; }
-        .logo-wrap img { max-height: 60px; width: auto; }
-        
-        /* Top Header (Barra superior) */
-        .top-header { background: #1c3961; color: #fff; padding: 8px 0; font-size: 0.9rem; }
-        .top-header .container { max-width: 1200px; margin: 0 auto; display: flex; justify-content: space-between; padding: 0 20px; }
-        .top-header a { color: #fff; margin-right: 20px; display: inline-flex; align-items: center; gap: 8px; }
-        
-        /* Menú Desktop */
-        .desktop-menu { display: flex; align-items: center; }
-        .main-menu { display: flex; gap: 30px; }
-        .main-menu a { font-weight: 600; color: #1c3961; font-size: 1rem; text-transform: uppercase; letter-spacing: 0.5px; transition: color 0.3s; }
-        .main-menu a:hover { color: #0066a9; }
-        
-        /* Responsive básico para el menú */
-        @media (max-width: 900px) {
-            .desktop-menu { display: none; }
-            .top-header { display: none; }
+        :root {
+            --primary: #7c3aed;
+            --secondary: #00ff88;
+            --background: #0f172a;
+            --glass: rgba(255, 255, 255, 0.05);
         }
-
-        /* Footer */
-        .page-footer { background: #1c3961; color: #fff; padding: 40px 0 20px; margin-top: 50px; }
-        .page-footer .container { max-width: 1200px; margin: 0 auto; padding: 0 20px; display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 30px; }
-        .page-footer h1 { font-size: 1.2rem; margin-bottom: 20px; border-bottom: 2px solid #0066a9; padding-bottom: 10px; display: inline-block; }
-        .page-footer a { color: #ccc; transition: color 0.3s; display: block; margin-bottom: 10px; }
-        .page-footer a:hover { color: #fff; }
-        .social-icon { display: inline-block !important; margin-right: 15px; font-size: 1.2rem; }
-        .footer-last-section { text-align: center; border-top: 1px solid rgba(255,255,255,0.1); margin-top: 40px; padding-top: 20px; font-size: 0.9rem; color: #aaa; }
-
-        /* --- ESTILOS DE LA HERRAMIENTA WMN (ADAPTADOS A TU MARCA) --- */
-        
-        .tool-container {
-            max-width: 1200px;
-            margin: 40px auto;
-            padding: 0 20px;
-            min-height: 60vh;
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Inter', sans-serif;
         }
-
-        .tool-header {
-            text-align: center;
-            margin-bottom: 40px;
+        body {
+            background: linear-gradient(45deg, #0f172a, #1e293b);
+            color: #fff;
+            min-height: 100vh;
+            padding: 2rem;
         }
-
-        .tool-title {
+        .container { max-width: 1200px; margin: 0 auto; }
+        .header { text-align: center; margin-bottom: 3rem; position: relative; }
+        .logo {
+            width: 100px;
+            filter: drop-shadow(0 0 10px rgba(124, 58, 237, 0.5));
+            margin-bottom: 1rem;
+            animation: float 3s ease-in-out infinite;
+        }
+        .title {
             font-size: 2.5rem;
-            color: #1c3961; /* Azul corporativo oscuro */
-            margin-bottom: 10px;
-            font-weight: 700;
+            background: linear-gradient(to right, var(--primary), var(--secondary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 0.5rem;
         }
-
-        .tool-subtitle {
-            color: #666;
-            font-size: 1.1rem;
+        .search-box {
+            background: var(--glass);
+            backdrop-filter: blur(12px);
+            border-radius: 20px;
+            padding: 2rem;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            margin-bottom: 2rem;
         }
-
-        /* Caja de Búsqueda Estilizada */
-        .search-box-wrapper {
-            background: #fff;
-            border-radius: 15px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.08); /* Sombra suave profesional */
-            padding: 30px;
-            max-width: 800px;
-            margin: 0 auto 40px;
-            border-top: 5px solid #0066a9; /* Borde superior con color de marca */
-        }
-
-        .search-form {
-            display: grid;
-            grid-template-columns: 2fr 1fr auto;
-            gap: 15px;
-        }
-
-        @media (max-width: 768px) {
-            .search-form { grid-template-columns: 1fr; }
-        }
-
+        .form-group { margin-bottom: 1.5rem; }
         .input-field {
             width: 100%;
-            padding: 15px;
-            border: 2px solid #e0e0e0;
-            border-radius: 8px;
+            padding: 1rem;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            color: #fff;
             font-size: 1rem;
-            font-family: 'Raleway', sans-serif;
-            transition: border-color 0.3s;
-            background: #f9f9f9;
+            transition: all 0.3s ease;
+            -webkit-appearance: none;
+            appearance: none;
         }
-
+        .input-field option {
+            background-color: #1e293b;
+            color: #fff;
+            padding: 10px;
+        }
         .input-field:focus {
             outline: none;
-            border-color: #0066a9;
-            background: #fff;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.3);
         }
-
+        select.input-field {
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 1rem center;
+            background-size: 1em;
+            padding-right: 2.5rem;
+        }
         .search-btn {
-            background: #1c3961;
-            color: #fff;
+            background: linear-gradient(45deg, var(--primary), var(--secondary));
             border: none;
-            padding: 15px 30px;
-            border-radius: 8px;
-            font-weight: 700;
-            cursor: pointer;
-            transition: all 0.3s;
-            text-transform: uppercase;
-        }
-
-        .search-btn:hover {
-            background: #0066a9;
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(0, 102, 169, 0.3);
-        }
-
-        /* Barra de Progreso */
-        .progress-container {
-            background: #fff;
-            padding: 20px;
+            padding: 1rem 2rem;
             border-radius: 10px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.05);
-            margin-bottom: 30px;
-            display: none; /* Oculto por defecto */
+            color: #fff;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.3s ease;
+            width: 100%;
+            text-transform: uppercase;
+            letter-spacing: 1px;
         }
-
-        .progress-bar-bg {
-            background: #e0e0e0;
-            height: 10px;
-            border-radius: 5px;
-            overflow: hidden;
-            margin-top: 10px;
+        .search-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(124, 58, 237, 0.4);
         }
-
-        .progress-fill {
-            background: linear-gradient(90deg, #1c3961, #0066a9);
-            height: 100%;
-            width: 0%;
-            transition: width 0.3s ease;
+        .progress-container {
+            background: var(--glass);
+            border-radius: 15px;
+            padding: 1.5rem;
+            margin: 2rem 0;
+            backdrop-filter: blur(5px);
         }
-
-        .progress-stats {
+        .progress-text {
             display: flex;
             justify-content: space-between;
-            color: #555;
-            font-weight: 600;
-            font-size: 0.9rem;
+            margin-bottom: 1rem;
+            color: #94a3b8;
         }
-
-        /* Grid de Resultados */
+        .progress-bar {
+            height: 8px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--primary), var(--secondary));
+            transition: width 0.3s ease;
+        }
         .results-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-            gap: 20px;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 1.5rem;
+            margin-top: 2rem;
         }
-
         .result-card {
-            background: #fff;
-            border-radius: 12px;
-            padding: 20px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
-            border: 1px solid #eee;
-            transition: transform 0.2s, box-shadow 0.2s;
+            background: var(--glass);
+            border-radius: 15px;
+            padding: 1.5rem;
+            backdrop-filter: blur(5px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            transition: all 0.3s ease;
             cursor: pointer;
             position: relative;
             overflow: hidden;
         }
-
-        .result-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 10px 20px rgba(0,0,0,0.1);
-            border-color: #0066a9;
+        .result-card.expanded {
+            grid-column: 1 / -1;
+            transform: none !important;
         }
-
-        .card-header {
+        .card-content {
+            margin-top: 1rem;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            padding-top: 1rem;
+        }
+        .extracted-info {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+        .info-item {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 0.75rem;
+            border-radius: 8px;
+            word-break: break-word;
+        }
+        .info-label {
+            font-size: 0.8rem;
+            color: var(--secondary);
+            margin-bottom: 0.25rem;
+            font-weight: 500;
+        }
+        .info-value {
+            font-size: 0.9rem;
+            color: #fff;
+        }
+        .no-info {
+            color: #94a3b8;
+            font-style: italic;
+            text-align: center;
+            padding: 1rem;
+        }
+        @keyframes float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
+        }
+        .loading-dots {
             display: flex;
-            align-items: center;
-            gap: 15px;
+            justify-content: center;
+            gap: 0.5rem;
+            margin-top: 1rem;
         }
-
-        .site-favicon {
-            width: 32px;
-            height: 32px;
-            border-radius: 4px;
+        .dot {
+            width: 8px;
+            height: 8px;
+            background: var(--secondary);
+            border-radius: 50%;
+            animation: bounce 1.4s infinite ease-in-out;
         }
-
-        .site-info h3 {
-            margin: 0;
-            font-size: 1.1rem;
-            color: #1c3961;
+        .dot:nth-child(2) { animation-delay: 0.2s; }
+        .dot:nth-child(3) { animation-delay: 0.4s; }
+        @keyframes bounce {
+            0%, 80%, 100% { transform: translateY(0); }
+            40% { transform: translateY(-10px); }
         }
-
-        .site-info span {
-            font-size: 0.85rem;
-            color: #777;
-            display: block;
-            margin-top: 4px;
+        .favicon {
+            width: 48px;
+            height: 48px;
         }
-
-        .category-tag {
-            position: absolute;
-            top: 10px;
-            right: 10px;
-            background: #f0f4f8;
-            color: #1c3961;
-            padding: 4px 8px;
-            border-radius: 4px;
-            font-size: 0.7rem;
-            font-weight: 700;
+        .info-image {
+            max-width: 100%;
+            height: auto;
+            border-radius: 8px;
         }
-
-        /* Modal de Detalles */
         .modal {
             display: none;
             position: fixed;
-            top: 0; left: 0;
-            width: 100%; height: 100%;
-            background: rgba(28, 57, 97, 0.8); /* Fondo azul oscuro transparente */
-            z-index: 2000;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
             justify-content: center;
             align-items: center;
+            z-index: 1000;
         }
-
         .modal-content {
-            background: #fff;
-            padding: 30px;
+            background: var(--glass);
             border-radius: 15px;
-            width: 90%;
+            padding: 2rem;
             max-width: 600px;
+            width: 90%;
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
             position: relative;
-            box-shadow: 0 20px 50px rgba(0,0,0,0.3);
+            transform: translate(-50%, -50%);
+            top: 50%;
+            left: 50%;
+            max-height: 80vh;
+            overflow-y: auto;
         }
-
-        .close-modal-btn {
+        .close-modal {
             position: absolute;
-            top: 15px;
-            right: 20px;
-            font-size: 1.5rem;
+            top: 1rem;
+            right: 1rem;
             cursor: pointer;
-            color: #888;
+            font-size: 1.5rem;
+            color: #fff;
         }
-
-        /* Loading Spinner */
-        .loading-dots { display: flex; justify-content: center; gap: 8px; margin-top: 10px; }
-        .dot { width: 8px; height: 8px; background: #0066a9; border-radius: 50%; animation: bounce 1.4s infinite ease-in-out; }
-        .dot:nth-child(2) { animation-delay: 0.2s; }
-        .dot:nth-child(3) { animation-delay: 0.4s; }
-        @keyframes bounce { 0%, 80%, 100% { transform: translateY(0); } 40% { transform: translateY(-10px); } }
-
+        .view-details-btn {
+            background: linear-gradient(45deg, var(--primary), var(--secondary));
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            color: #fff;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.3s ease;
+            margin-top: 1rem;
+        }
+        .view-details-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(124, 58, 237, 0.4);
+        }
     </style>
 </head>
 <body>
-
-    <header class="site-header">
-        <div class="top-header">
-            <div class="container">
-                <div class="top-header-left">
-                    <a href="mailto:ManuelBot@proton.me"><i class="fas fa-envelope"></i> ManuelBot@proton.me</a>
-                    <a href="https://t.me/ManuelBot59_Bot" target="_blank"><i class="fas fa-terminal"></i> Manuel Travezaño</a>
+    <div class="container">
+        <header class="header">
+            <img src="https://github.com/WebBreacher/WhatsMyName/blob/main/whatsmyname.png?raw=true" class="logo" alt="Logo">
+            <h1 class="title">WhatsMyName Web</h1>
+        </header>
+        <div class="search-box">
+            <form id="searchForm">
+                <div class="form-group">
+                    <input type="text" class="input-field" id="username" placeholder="Enter username" required>
                 </div>
-                <div class="top-header-right">
-                    <span><i class="fas fa-shield-alt"></i> Herramienta de Investigación OSINT</span>
-                </div>
-            </div>
-        </div>
-
-        <div class="main-header">
-            <div class="container">
-                <div class="logo-wrap">
-                    <img src="https://manuelbot59.com/images/FirmaManuelBot59.png" alt="Manuel Travezaño Logo">
-                </div>
-
-                <nav class="desktop-menu">
-                    <ul class="main-menu">
-                        <li><a href="https://manuelbot59.com/">Inicio</a></li>
-                        <li><a href="https://manuelbot59.com/formacion/">Cursos</a></li>
-                        <li><a href="https://manuelbot59.com/osint/">OSINT</a></li>
-                        <li><a href="#" style="color: #0066a9; border-bottom: 2px solid #0066a9;">WhatsMyName Web</a></li>
-                    </ul>
-                </nav>
-            </div>
-        </div>
-    </header>
-
-    <main class="tool-container">
-        
-        <div class="tool-header">
-            <br><br>
-            <h1 class="tool-title">Buscador de Usuarios (Username Enumeration)</h1>
-            <p class="tool-subtitle">Investiga la presencia de un nombre de usuario en cientos de sitios web. Recurso táctico para SOCMINT.</p>
-        </div>
-
-        <div class="search-box-wrapper">
-            <form id="searchForm" class="search-form">
-                <input type="text" class="input-field" id="username" placeholder="Ingresa el nombre de usuario (ej: manuelbot59)" required>
-                
-                <select class="input-field" id="category">
-                    <option value="">Todas las categorías</option>
+                <div class="form-group">
+                    <select class="input-field" id="category">
+                        <option value="">All Categories</option>
                     </select>
-
-                <button type="submit" class="search-btn">
-                    <i class="fas fa-search"></i> Investigar
-                </button>
+                </div>
+                <button type="submit" class="search-btn">Search</button>
             </form>
         </div>
-
-        <div class="progress-container" id="progress">
-            <div class="progress-stats">
-                <span><i class="fas fa-check-circle" style="color: #27ae60;"></i> Encontrados: <span id="foundCount">0</span></span>
-                <span>Procesando: <span id="processedCount">0</span>/<span id="totalCount">0</span></span>
+        <div class="progress-container" id="progress" style="display: none;">
+            <div class="progress-text">
+                <span>Found: <span id="foundCount">0</span></span>
+                <span>Processed: <span id="processedCount">0</span>/<span id="totalCount">0</span></span>
             </div>
-            <div class="progress-bar-bg">
-                <div class="progress-fill"></div>
+            <div class="progress-bar">
+                <div class="progress-fill" style="width: 0%"></div>
             </div>
             <div class="loading-dots">
-                <div class="dot"></div><div class="dot"></div><div class="dot"></div>
+                <div class="dot"></div>
+                <div class="dot"></div>
+                <div class="dot"></div>
             </div>
         </div>
-
-        <div class="results-grid" id="resultsHTML">
-            </div>
-
-    </main>
-
+        <div class="results-grid" id="resultsHTML"></div>
+    </div>
     <div class="modal" id="detailsModal">
         <div class="modal-content">
-            <span class="close-modal-btn" id="closeModal">×</span>
-            <h3 style="color: #1c3961; margin-top: 0;">Detalles Extraídos</h3>
-            <div id="modalContent" style="margin-top: 20px; line-height: 1.6;"></div>
+            <span class="close-modal" id="closeModal">&times;</span>
+            <div id="modalContent"></div>
         </div>
     </div>
-
-    <footer class="page-footer">
-        <div class="container">
-            <div class="footer-col">
-                <h1>Contáctanos</h1>
-                <a href="mailto:ManuelBot@proton.me"><i class="fas fa-envelope social-icon"></i> ManuelBot@proton.me</a>
-                <a href="https://t.me/ManuelBot59_Bot"><i class="fas fa-terminal social-icon"></i> ManuelBot59</a>
-                <p style="color: #aaa; margin-top: 10px;">Lima, Perú</p>
-                <div style="margin-top: 20px;">
-                    <a href="#" class="social-icon"><i class="fab fa-facebook-square"></i></a>
-                    <a href="#" class="social-icon"><i class="fab fa-twitter"></i></a>
-                    <a href="#" class="social-icon"><i class="fab fa-linkedin-in"></i></a>
-                </div>
-            </div>
-            
-            <div class="footer-col">
-                <h1>Enlaces de Interés</h1>
-                <a href="#">Guía de formación OSINT</a>
-                <a href="#">Comunidad en Patreon</a>
-                <a href="#">Canal de Telegram</a>
-            </div>
-
-            <div class="footer-col">
-                <h1>Sobre la Herramienta</h1>
-                <p style="color: #ccc; font-size: 0.9rem;">
-                    Esta interfaz web utiliza el motor 'WhatsMyName' para fines educativos y de investigación legítima. 
-                    Desarrollado y optimizado por Manuel Travezaño.
-                </p>
-            </div>
-        </div>
-        
-        <div class="footer-last-section">
-            <p>Copyright © 2026 Manuel Travezaño OSINT. Todos los derechos reservados</p>
-        </div>
-    </footer>
-
     <script>
         $(document).ready(function() {
+            const socket = io();
             
-            // OJO AQUÍ: Si tienes el backend en Render, pon la URL aquí.
-            // Si está en el mismo servidor, déjalo vacío como io().
-            // Ejemplo: const socket = io("https://whatsmyname-backend.onrender.com");
-            const socket = io(); 
-            
-            // Cargar categorías al inicio
-            socket.emit('request_categories');
-            socket.on('categories', data => {
+            function loadCategories(categories) {
                 const categorySelect = $('#category');
-                categorySelect.empty().append(new Option("Todas las categorías", ""));
-                data.categories.forEach(cat => categorySelect.append(new Option(cat, cat)));
-            });
-
-            // Función de Actualización de Barra
+                categorySelect.empty().append(new Option("All Categories", ""));
+                categories.forEach(cat => categorySelect.append(new Option(cat, cat)));
+            }
+            
             function updateProgress(processed, total) {
                 const percent = (processed / total) * 100;
                 $('.progress-fill').css('width', `${percent}%`);
             }
             
-            // Resetear interfaz
             function resetSearch() {
-                $('#progress').slideDown();
+                $('#progress').show();
                 $('#resultsHTML').empty();
                 $('.progress-fill').css('width', '0%');
                 $('.loading-dots').show();
@@ -423,7 +325,6 @@
                 $('#totalCount').text('0');
             }
             
-            // Enviar Búsqueda
             $('#searchForm').submit(function(e) {
                 e.preventDefault();
                 const username = $('#username').val();
@@ -432,55 +333,87 @@
                 socket.emit('start_search', { username, category });
             });
             
-            // Recibir Progreso
             socket.on('progress', data => {
                 $('#processedCount').text(data.processed);
                 $('#totalCount').text(data.total);
                 updateProgress(data.processed, data.total);
             });
             
-            // Recibir Resultados
             socket.on('new_result', data => {
                 const domain = new URL(data.url).hostname;
                 const favicon = `https://www.google.com/s2/favicons?domain=${domain}&sz=64`;
                 
-                // Formatear info extraída
-                let extractedDataHtml = '';
+                let extractedInfoHTML = '';
                 if (data.extracted_info && Object.keys(data.extracted_info).length > 0) {
-                    extractedDataHtml = `<div class="extracted-data" style="display:none;">${JSON.stringify(data.extracted_info)}</div>`;
+                    extractedInfoHTML = `
+                        <div class="extracted-info">
+                            ${Object.entries(data.extracted_info).map(([key, value]) => `
+                                <div class="info-item">
+                                    <div class="info-label">${key}</div>
+                                    ${key === 'Image' ? `<img src="${value}" class="info-image" alt="Image">` : `<div class="info-value">${value}</div>`}
+                                </div>
+                            `).join('')}
+                        </div>
+                    `;
                 }
-
+                
                 const card = `
-                    <div class="result-card" onclick="window.open('${data.url}', '_blank')">
-                        <div class="category-tag">${data.category}</div>
-                        <div class="card-header">
-                            <img src="${favicon}" class="site-favicon" onerror="this.src='https://via.placeholder.com/32'">
-                            <div class="site-info">
-                                <h3>${data.site_name}</h3>
-                                <span>${data.username}</span>
+                    <div class="result-card">
+                        <div class="card-header" data-url="${data.url}">
+                            <img src="${favicon}" class="favicon" alt="Favicon">
+                            <div>
+                                <div class="site-name">Site Name: ${data.site_name}</div>
+                                <div class="username">Username: ${data.username}</div>
+                                <div class="category">Category: ${data.category}</div>
                             </div>
                         </div>
-                        ${extractedDataHtml ? '<div style="margin-top:10px; font-size:0.8rem; color:#0066a9;"><i class="fas fa-info-circle"></i> Info detectada</div>' : ''}
+                        ${extractedInfoHTML ? `
+                            <button class="view-details-btn">View Details</button>
+                            <div class="card-content" style="display: none;">
+                                <div class="extracted-info-container">
+                                    <h3>Extracted Information</h3>
+                                    ${extractedInfoHTML}
+                                </div>
+                            </div>
+                        ` : ''}
                     </div>
                 `;
                 
                 $('#resultsHTML').append(card);
             });
             
-            // Actualizar contador encontrados
+            $(document).on('click', '.view-details-btn', function(e) {
+                e.stopPropagation();
+                const content = $(this).siblings('.card-content').html();
+                $('#modalContent').html(content);
+                $('#detailsModal').fadeIn();
+            });
+            
+            $('#closeModal').click(function() {
+                $('#detailsModal').fadeOut();
+            });
+            
+            $(document).on('click', '.result-card', function(e) {
+                const url = $(this).find('.card-header').data('url');
+                if (url) window.open(url, '_blank');
+            });
+            
             socket.on('found_count', data => {
                 $('#foundCount').text(data.found);
             });
             
-            // Fin de búsqueda
             socket.on('search_complete', () => {
                 $('.loading-dots').hide();
             });
-
-            // Modal logic (si quisieras mostrar detalles al hacer click en info extra)
-            $('#closeModal').click(function() {
-                $('#detailsModal').fadeOut();
+            
+            $(document).on('click', function(e) {
+                if ($(e.target).closest('.modal-content').length === 0) {
+                    $('#detailsModal').fadeOut();
+                }
             });
+            
+            socket.emit('request_categories');
+            socket.on('categories', data => loadCategories(data.categories));
         });
     </script>
 </body>
