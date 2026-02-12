@@ -248,6 +248,6 @@ if start_btn:
 st.markdown("""
 <div class="footer-credits">
     This tool is powered by <a href="https://github.com/WebBreacher/WhatsMyName" target="_blank">WhatsMyName</a><br>
-    Implementación y optimización por <strong>Manuel Travezaño</strong>
+    Implementation and optimization by <strong>Manuel Travezaño</strong>
 </div>
 """, unsafe_allow_html=True)
