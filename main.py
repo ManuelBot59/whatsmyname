@@ -1,8 +1,12 @@
 import streamlit as st
 import requests
+import pandas as pd
+from fpdf import FPDF
 from concurrent.futures import ThreadPoolExecutor, as_completed
+import io
+import tempfile
 
-# --- 1. CONFIGURACIÓN DE PÁGINA (Título de Pestaña) ---
+# --- 1. CONFIGURACIÓN DE PÁGINA ---
 st.set_page_config(
     page_title="WhatsMyName Web | Herramienta SOCMINT | Manuel Travezaño",
     page_icon="🔍",
@@ -10,21 +14,18 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# --- 2. ESTILOS CSS (Adaptados a tu Marca: Azul #1c3961 y Blanco/Gris) ---
+# --- 2. ESTILOS CSS ---
 st.markdown("""
 <style>
-    /* Ocultar elementos nativos de Streamlit */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     header {visibility: hidden;}
 
-    /* Fondo general más limpio */
     .stApp {
         background-color: #f4f7f6;
         color: #333;
     }
 
-    /* Títulos Principales */
     h1 {
         background: linear-gradient(45deg, #1c3961, #0066a9);
         -webkit-background-clip: text;
@@ -34,73 +35,30 @@ st.markdown("""
         text-align: center;
         padding-top: 1rem;
     }
-    
-    /* Subtítulos */
-    h3 {
+
+    /* Estilo de Tarjetas (Botones del Grid) */
+    div[data-testid="stColumn"] > div > div > div > div.stButton > button {
+        background-color: white;
         color: #1c3961;
-        text-align: center;
-        font-weight: 600;
-        margin-bottom: 2rem;
-    }
-
-    /* Tarjetas de Resultados */
-    .result-card {
-        background-color: #ffffff;
-        padding: 20px;
-        border-radius: 12px;
-        border-left: 5px solid #27ae60; /* Tu verde corporativo */
-        margin-bottom: 15px;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.05);
-        transition: transform 0.2s;
-    }
-    .result-card:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 8px 15px rgba(0,0,0,0.1);
-    }
-    
-    /* Enlaces en las tarjetas */
-    .result-link {
-        color: #1c3961 !important;
-        text-decoration: none;
-        font-weight: bold;
-        font-size: 1.1em;
-        display: block;
-        margin-top: 5px;
-    }
-    .result-link:hover {
-        color: #27ae60 !important;
-        text-decoration: underline;
-    }
-
-    /* Badges de Categoría */
-    .category-badge {
-        background-color: #eef2f6;
-        color: #1c3961;
-        padding: 4px 10px;
-        border-radius: 20px;
-        font-size: 0.75em;
-        font-weight: bold;
-        float: right;
-        text-transform: uppercase;
-    }
-
-    /* Botón Principal (Estilo ManuelBot) */
-    .stButton > button {
-        background-color: #1c3961;
-        color: white;
-        border-radius: 8px;
-        border: none;
-        font-weight: bold;
-        padding: 0.5rem 1rem;
+        border: 1px solid #ddd;
+        border-radius: 10px;
+        height: 120px;
         width: 100%;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+        transition: all 0.3s;
     }
-    .stButton > button:hover {
-        background-color: #0066a9;
-        color: white;
-        border: none;
+    
+    div[data-testid="stColumn"] > div > div > div > div.stButton > button:hover {
+        border-color: #00c6fb;
+        transform: translateY(-5px);
+        box-shadow: 0 10px 15px rgba(0,0,0,0.1);
+        background-color: #f0f9ff;
     }
 
-    /* Footer de Créditos */
     .footer-credits {
         text-align: center;
         margin-top: 50px;
@@ -117,149 +75,254 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# --- LÓGICA DEL MOTOR (Requests puro para velocidad) ---
+# --- 3. LÓGICA DE BÚSQUEDA ---
 WMN_DATA_URL = "https://raw.githubusercontent.com/WebBreacher/WhatsMyName/main/wmn-data.json"
+LOGO_URL = "https://manuelbot59.com/images/FirmaManuelBot59.png" # Logo para el PDF
 
 @st.cache_data
 def load_sites():
-    """Descarga y cachea la base de datos de sitios para no descargarla en cada búsqueda"""
     try:
         response = requests.get(WMN_DATA_URL)
         data = response.json()
         return data['sites']
     except Exception as e:
-        st.error(f"Error conectando con la base de datos: {e}")
+        st.error(f"Error: {e}")
         return []
 
 def check_site(site, username):
-    """Verifica un solo sitio con timeout corto para velocidad"""
     uri = site['uri_check'].format(account=username)
     try:
-        # Headers para parecer un navegador real
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-        }
-        # Timeout de 5s para que no se cuelgue si un sitio es lento
+        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
         r = requests.get(uri, headers=headers, timeout=5)
         
-        # Lógica de detección de WMN
         if r.status_code == site['e_code']:
             if site.get('e_string') and site['e_string'] not in r.text:
                 return None
+            
+            domain = uri.split('/')[2]
+            favicon = f"https://www.google.com/s2/favicons?domain={domain}&sz=128"
+            
             return {
                 "name": site['name'],
                 "uri": uri,
-                "category": site['cat']
+                "category": site['cat'],
+                "image": favicon
             }
     except:
         return None
     return None
 
-# --- 3. BARRA LATERAL (Simulando tu Menú Web) ---
+# --- 4. CLASE PDF PERSONALIZADA ---
+class PDFReport(FPDF):
+    def header(self):
+        # Intentamos descargar el logo temporalmente para ponerlo en el PDF
+        try:
+            logo_path = "logo_temp.png"
+            response = requests.get(LOGO_URL)
+            if response.status_code == 200:
+                with open(logo_path, 'wb') as f:
+                    f.write(response.content)
+                self.image(logo_path, 10, 8, 50)
+        except:
+            pass
+            
+        self.set_font('Arial', 'B', 15)
+        self.cell(80)
+        self.cell(30, 10, 'Reporte de Investigacion OSINT', 0, 0, 'C')
+        self.ln(20)
+
+    def footer(self):
+        self.set_y(-15)
+        self.set_font('Arial', 'I', 8)
+        self.cell(0, 10, f'Page {self.page_no()} - Generado por manuelbot59.com', 0, 0, 'C')
+
+# --- 5. VENTANA EMERGENTE (MODAL) ---
+@st.dialog("Detalles Extraídos")
+def show_details(item):
+    col_info, col_link = st.columns([2, 1.5])
+    
+    with col_info:
+        st.caption("PLATAFORMA")
+        st.subheader(item['name'])
+        st.caption(f"Categoría: {item['category']}")
+        
+    with col_link:
+        st.write("") # Espacio
+        # Usamos st.link_button nativo para asegurar que funcione el estilo y el enlace
+        st.link_button("🔗 Ver perfil Detectado", item['uri'], type="primary", use_container_width=True)
+
+    st.markdown("---")
+    
+    # Imagen centrada al 60%
+    c1, c2, c3 = st.columns([1, 3, 1])
+    with c2:
+        st.markdown("<div style='text-align: center;'>", unsafe_allow_html=True)
+        # Mostramos la imagen
+        st.image(item['image'], caption="Evidencia Visual", width=200)
+        st.markdown("</div>", unsafe_allow_html=True)
+        
+    st.success("✅ Hallazgo positivo.")
+
+# --- 6. INTERFAZ PRINCIPAL ---
+
 with st.sidebar:
-    # Tu Logo Oficial (Usando la URL de tu web para que cargue siempre)
-    st.image("https://manuelbot59.com/images/FirmaManuelBot59.png", use_column_width=True)
-    
+    st.image(LOGO_URL, use_column_width=True)
     st.markdown("### 📌 Navegación")
-    st.markdown("""
-    - [🏠 Inicio](https://manuelbot59.com/)
-    - [🎓 Cursos](https://manuelbot59.com/formacion/)
-    - [🛒 Tienda](https://manuelbot59.com/tienda/)
-    - [🕵️ OSINT](https://manuelbot59.com/osint/)
-    """)
-    
+    st.markdown("- [🏠 Inicio](https://manuelbot59.com/)")
+    st.markdown("- [🎓 Cursos](https://manuelbot59.com/formacion/)")
+    st.markdown("- [🕵️ OSINT](https://manuelbot59.com/osint/)")
     st.markdown("---")
     st.markdown("### 📞 Contacto")
     st.markdown("📧 **Email:** ManuelBot@proton.me")
-    st.markdown("✈️ **Telegram:** [ManuelBot59](https://t.me/ManuelBot59_Bot)")
-    
+    # Cambio solicitado: "Telegram Soporte"
+    st.markdown("✈️ **Telegram Soporte:** [ManuelBot59](https://t.me/ManuelBot59_Bot)")
     st.markdown("---")
-    st.info("Esta herramienta realiza una enumeración de usuarios en +500 sitios web públicos utilizando técnicas SOCMINT.")
 
-# --- 4. INTERFAZ PRINCIPAL ---
-
-# Títulos
 st.title("WhatsMyName Web")
 st.markdown("### Herramienta SOCMINT | Manuel Travezaño")
 
-# Cargar datos
 sites = load_sites()
 categories = sorted(list(set([s['cat'] for s in sites])))
 
-# Panel de Búsqueda
-with st.container():
-    col1, col2, col3 = st.columns([3, 1, 1])
-    with col1:
-        username = st.text_input("Usuario a investigar", placeholder="Ej: manuelbot59", label_visibility="collapsed")
-    with col2:
-        selected_category = st.selectbox("Categoría", ["Todas"] + categories, label_visibility="collapsed")
-    with col3:
-        start_btn = st.button("🔍 INVESTIGAR", use_container_width=True)
+c1, c2, c3 = st.columns([3, 1, 1])
+with c1:
+    username = st.text_input("Usuario", placeholder="Ej: manuelbot59", label_visibility="collapsed")
+with c2:
+    cat_filter = st.selectbox("Cat", ["Todas"] + categories, label_visibility="collapsed")
+with c3:
+    run_btn = st.button("🔍 INVESTIGAR", use_container_width=True, type="primary")
 
-# Resultados
-if start_btn:
-    if not username:
-        st.warning("⚠️ Por favor ingresa un nombre de usuario.")
-    else:
-        # Filtrar sitios según categoría
-        if selected_category != "Todas":
-            target_sites = [s for s in sites if s['cat'] == selected_category]
-        else:
-            target_sites = sites
+if "results_list" not in st.session_state:
+    st.session_state.results_list = []
+
+if run_btn and username:
+    st.session_state.results_list = []
+    target_sites = sites if cat_filter == "Todas" else [s for s in sites if s['cat'] == cat_filter]
+    
+    prog_bar = st.progress(0)
+    status = st.empty()
+    grid_container = st.container()
+    
+    processed = 0
+    
+    with ThreadPoolExecutor(max_workers=25) as executor:
+        futures = {executor.submit(check_site, s, username): s for s in target_sites}
         
-        # Barra de progreso y status
-        st.divider()
-        st.markdown(f"**🔎 Analizando huella digital para:** `{username}` en **{len(target_sites)}** plataformas...")
-        
-        progress_bar = st.progress(0)
-        status_text = st.empty()
-        results_area = st.container()
-        
-        found_count = 0
-        processed_count = 0
-        
-        # --- AQUÍ ESTÁ LA VELOCIDAD: MULTITHREADING ---
-        # Buscamos en 30 sitios simultáneamente
-        max_workers = 30 
-        
-        with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            # Lanzamos todas las tareas
-            future_to_site = {executor.submit(check_site, site, username): site for site in target_sites}
+        for future in as_completed(futures):
+            res = future.result()
+            processed += 1
+            if processed % 10 == 0:
+                prog_bar.progress(processed / len(target_sites))
+                status.text(f"Analizando: {processed}/{len(target_sites)}")
             
-            for future in as_completed(future_to_site):
-                result = future.result()
-                processed_count += 1
-                
-                # Actualizar barra cada 5 sitios para no saturar la UI
-                if processed_count % 5 == 0 or processed_count == len(target_sites):
-                    progress = processed_count / len(target_sites)
-                    progress_bar.progress(progress)
-                    status_text.text(f"Procesando: {processed_count}/{len(target_sites)}")
-                
-                if result:
-                    found_count += 1
-                    with results_area:
-                        # Inyectamos HTML personalizado para cada tarjeta (Estilo ManuelBot)
-                        st.markdown(f"""
-                        <div class="result-card">
-                            <span class="category-badge">{result['category']}</span>
-                            <div style="font-size: 0.9em; color: #666; margin-bottom: 5px;">Sitio detectado:</div>
-                            <div style="font-size: 1.2em; font-weight: bold; color: #333;">{result['name']}</div>
-                            <a href="{result['uri']}" target="_blank" class="result-link">
-                                🔗 Ver Perfil Detectado
-                            </a>
-                        </div>
-                        """, unsafe_allow_html=True)
+            if res:
+                st.session_state.results_list.append(res)
+    
+    prog_bar.empty()
+    status.success(f"Análisis finalizado. {len(st.session_state.results_list)} cuentas encontradas.")
 
-        progress_bar.progress(100)
-        status_text.empty()
+# --- 7. RENDERIZADO Y EXPORTACIÓN ---
+if st.session_state.results_list:
+    st.markdown("### 🎯 Resultados Encontrados")
+    
+    # Grid Layout
+    cols_per_row = 4
+    results = st.session_state.results_list
+    
+    for i in range(0, len(results), cols_per_row):
+        cols = st.columns(cols_per_row)
+        for j in range(cols_per_row):
+            if i + j < len(results):
+                item = results[i + j]
+                with cols[j]:
+                    # Botón que abre el modal
+                    if st.button(f"✅ {item['name']}\n\n({item['category']})", key=f"btn_{item['uri']}"):
+                        show_details(item)
+
+    # --- ZONA DE EXPORTACIÓN ---
+    st.divider()
+    st.subheader("📥 Descargar Reporte")
+    
+    col_pdf, col_csv, col_txt = st.columns(3)
+    
+    # Preparar datos
+    df = pd.DataFrame(st.session_state.results_list)
+    
+    # 1. Exportar CSV
+    csv_data = df.to_csv(index=False).encode('utf-8')
+    csv_data += b"\n\nGenerado por: https://manuelbot59.com"
+    
+    with col_csv:
+        st.download_button(
+            label="📄 Descargar CSV",
+            data=csv_data,
+            file_name=f"reporte_{username}.csv",
+            mime="text/csv",
+            use_container_width=True
+        )
+
+    # 2. Exportar TXT
+    txt_buffer = io.StringIO()
+    txt_buffer.write(f"REPORTE DE INVESTIGACION OSINT - USUARIO: {username}\n")
+    txt_buffer.write("="*50 + "\n\n")
+    for item in st.session_state.results_list:
+        txt_buffer.write(f"Sitio: {item['name']}\nURL: {item['uri']}\nCategoria: {item['category']}\n{'-'*30}\n")
+    txt_buffer.write(f"\nGenerado por: https://manuelbot59.com\n")
+    
+    with col_txt:
+        st.download_button(
+            label="📝 Descargar TXT",
+            data=txt_buffer.getvalue(),
+            file_name=f"reporte_{username}.txt",
+            mime="text/plain",
+            use_container_width=True
+        )
+
+    # 3. Exportar PDF (Con Logo)
+    try:
+        pdf = PDFReport()
+        pdf.add_page()
+        pdf.set_font("Arial", size=12)
         
-        if found_count > 0:
-            st.success(f"✅ Análisis finalizado. Se encontraron {found_count} perfiles potenciales.")
-        else:
-            st.warning("❌ No se encontraron perfiles con este nombre de usuario.")
+        pdf.cell(200, 10, txt=f"Objetivo: {username}", ln=1, align='L')
+        pdf.cell(200, 10, txt=f"Total Encontrados: {len(results)}", ln=1, align='L')
+        pdf.ln(10)
+        
+        # Tabla simple en PDF
+        pdf.set_font("Arial", 'B', 10)
+        pdf.cell(50, 10, "Sitio", 1)
+        pdf.cell(40, 10, "Categoria", 1)
+        pdf.cell(100, 10, "Enlace", 1)
+        pdf.ln()
+        
+        pdf.set_font("Arial", size=9)
+        for item in results:
+            pdf.cell(50, 10, item['name'][:25], 1)
+            pdf.cell(40, 10, item['category'], 1)
+            pdf.cell(100, 10, item['uri'][:60], 1) # Recortar si es muy largo
+            pdf.ln()
+            
+        # Firma Final
+        pdf.ln(20)
+        pdf.set_font("Arial", 'I', 10)
+        pdf.cell(0, 10, "Reporte generado por WhatsMyName Web - manuelbot59.com", 0, 1, 'C')
+        
+        # Guardar en buffer
+        pdf_bytes = pdf.output(dest='S').encode('latin-1', 'ignore')
+        
+        with col_pdf:
+            st.download_button(
+                label="📕 Descargar PDF",
+                data=pdf_bytes,
+                file_name=f"reporte_{username}.pdf",
+                mime="application/pdf",
+                use_container_width=True
+            )
+    except Exception as e:
+        with col_pdf:
+            st.error(f"Error PDF: {e}")
 
-# --- 5. FOOTER / CRÉDITOS ---
+# Footer final
 st.markdown("""
 <div class="footer-credits">
     This tool is powered by <a href="https://github.com/WebBreacher/WhatsMyName" target="_blank">WhatsMyName</a><br>
