@@ -351,7 +351,7 @@ def generate_files(results, target):
             if item.get('details'):
                 pdf.ln(2)
                 pdf.set_font("Arial", 'B', 9)
-                pdf.cell(0, 5, clean_text("Detalles Extraidos:"), ln=1)
+                pdf.cell(0, 5, clean_text("Detalles Extraídos:"), ln=1)
                 pdf.set_font("Arial", size=8)
                 for k, v in item['details'].items():
                     # Limpiar texto para PDF (quitar emojis o caracteres raros básicos)
