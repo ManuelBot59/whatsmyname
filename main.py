@@ -10,6 +10,8 @@ from email_validator import validate_email, EmailNotValidError
 import urllib.parse
 from datetime import datetime
 import time
+import tempfile # <--- NUEVO: Para gestionar imágenes temporales en el PDF
+import os       # <--- NUEVO: Para borrar los temporales
 
 # Importamos socid-extractor
 try:
@@ -177,7 +179,6 @@ def extract_generic_meta(url):
 def check_site(site, username):
     uri = site['uri_check'].format(account=username)
     
-    # 1. Validación de existencia
     try:
         r = requests.get(uri, headers=get_headers(), timeout=6)
         if r.status_code != site['e_code']: return None
@@ -189,17 +190,11 @@ def check_site(site, username):
     image_url = None
     site_name = site['name'].lower()
     
-    # Enrutamiento
-    if "telegram" in site_name: 
-        details, image_url = extract_telegram(username)
-    elif "gitlab" in site_name: 
-        details, image_url = extract_gitlab(username)
-    elif "github" in site_name:
-        details, image_url = extract_github(username)
-    elif "gravatar" in site_name: 
-        details, image_url = extract_gravatar(username)
+    if "telegram" in site_name: details, image_url = extract_telegram(username)
+    elif "gitlab" in site_name: details, image_url = extract_gitlab(username)
+    elif "github" in site_name: details, image_url = extract_github(username)
+    elif "gravatar" in site_name: details, image_url = extract_gravatar(username)
     else:
-        # Genérico + Socid
         details, image_url = extract_generic_meta(uri)
         if not details and socid_extract:
             try:
@@ -209,21 +204,13 @@ def check_site(site, username):
                     image_url = data.get('image')
             except: pass
 
-    # Fallback de imagen
     if not image_url:
         try:
             domain = uri.split('/')[2]
             image_url = f"https://www.google.com/s2/favicons?domain={domain}&sz=128"
-        except: 
-            image_url = "https://via.placeholder.com/128?text=Found"
+        except: image_url = "https://via.placeholder.com/128?text=Found"
 
-    return {
-        "name": site['name'],
-        "uri": uri,
-        "category": site['cat'],
-        "image": image_url,
-        "details": details
-    }
+    return {"name": site['name'], "uri": uri, "category": site['cat'], "image": image_url, "details": details}
 
 # --- 5. MÓDULO DE CORREO ---
 def analyze_email(email):
@@ -262,7 +249,7 @@ def analyze_email(email):
 
     return results
 
-# --- 6. GENERADORES DE ARCHIVOS ---
+# --- 6. GENERADORES DE ARCHIVOS (CON IMAGENES Y DETALLES) ---
 WMN_DATA_URL = "https://raw.githubusercontent.com/WebBreacher/WhatsMyName/main/wmn-data.json"
 APP_URL = "https://whatsmyname.streamlit.app/"
 
@@ -290,10 +277,12 @@ def generate_files(results, target):
     timestamp_display = now.strftime("%d/%m/%Y %H:%M:%S (GMT%z)")
     timestamp_filename = now.strftime("%Y%m%d_%H%M%S")
 
+    # 1. CSV
     df = pd.DataFrame(results)
     df['fecha_extraccion'] = timestamp_display
     csv = df.drop(columns=['details', 'image'], errors='ignore').to_csv(index=False).encode('utf-8')
     
+    # 2. TXT
     txt = io.StringIO()
     txt.write(f"REPORTE DE INVESTIGACION - USUARIO: {target}\n")
     txt.write(f"Fecha de Extraccion: {timestamp_display}\n")
@@ -307,6 +296,7 @@ def generate_files(results, target):
                 txt.write(f"  - {k}: {v}\n")
         txt.write("-" * 20 + "\n")
     
+    # 3. PDF MEJORADO (CON IMAGENES Y DETALLES)
     pdf_bytes = None
     try:
         pdf = PDFReport() 
@@ -318,25 +308,62 @@ def generate_files(results, target):
         pdf.cell(0, 10, f"Total Hallazgos: {len(results)}", ln=1)
         pdf.ln(10)
         
-        pdf.set_fill_color(240, 240, 240)
-        pdf.set_font("Arial", 'B', 9)
-        pdf.cell(50, 8, clean_text("Plataforma"), 1, 0, 'L', 1)
-        pdf.cell(40, 8, clean_text("Categoría"), 1, 0, 'L', 1)
-        pdf.cell(100, 8, clean_text("Enlace"), 1, 1, 'L', 1)
-        
-        pdf.set_font("Arial", size=9)
         for item in results:
-            name = clean_text(item['name'][:25])
-            cat = clean_text(item['category'][:20])
+            # Fondo gris para el encabezado del item
+            pdf.set_fill_color(240, 240, 240)
+            pdf.set_font("Arial", 'B', 11)
+            pdf.cell(0, 8, clean_text(f"{item['name']} ({item['category']})"), 1, 1, 'L', 1)
             
-            pdf.cell(50, 8, name, 1)
-            pdf.cell(40, 8, cat, 1)
+            # Posición inicial del bloque de contenido
+            start_y = pdf.get_y()
             
+            # --- IMAGEN ---
+            image_width = 0
+            if item.get('image') and "placeholder" not in item['image']:
+                try:
+                    # Descargar imagen a archivo temporal
+                    img_data = requests.get(item['image'], headers=get_headers(), timeout=3).content
+                    with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tmp_file:
+                        tmp_file.write(img_data)
+                        tmp_path = tmp_file.name
+                    
+                    # Insertar imagen (25x25 aprox)
+                    pdf.image(tmp_path, x=pdf.get_x() + 2, y=start_y + 2, w=25)
+                    image_width = 30 # Espacio reservado para texto
+                    
+                    # Limpiar temporal
+                    os.unlink(tmp_path)
+                except:
+                    image_width = 0 # Si falla, no dejamos espacio
+            
+            # --- DETALLES Y TEXTO ---
+            pdf.set_left_margin(10 + image_width) # Mover margen para el texto
+            pdf.set_y(start_y + 2)
+            
+            pdf.set_font("Arial", size=9)
+            
+            # URL
             pdf.set_text_color(0, 0, 255)
-            pdf.cell(100, 8, clean_text("Enlace al perfil"), 1, 0, link=item['uri'])
+            pdf.multi_cell(0, 5, clean_text(f"URL: {item['uri']}"))
             pdf.set_text_color(0, 0, 0)
-            pdf.ln()
             
+            # Detalles Extraídos
+            if item.get('details'):
+                pdf.ln(2)
+                pdf.set_font("Arial", 'B', 9)
+                pdf.cell(0, 5, clean_text("Detalles Extraidos:"), ln=1)
+                pdf.set_font("Arial", size=8)
+                for k, v in item['details'].items():
+                    # Limpiar texto para PDF (quitar emojis o caracteres raros básicos)
+                    val = str(v).replace('\n', ' ').strip()
+                    pdf.multi_cell(0, 4, clean_text(f"- {k}: {val}"))
+            
+            # Restaurar margen y posición para el siguiente item
+            pdf.set_left_margin(10)
+            pdf.set_y(start_y + 35 if image_width > 0 and pdf.get_y() < start_y + 30 else pdf.get_y() + 5)
+            pdf.line(10, pdf.get_y(), 200, pdf.get_y()) # Línea separadora
+            pdf.ln(5)
+
         pdf_bytes = pdf.output(dest='S').encode('latin-1', 'ignore')
     except Exception as e:
         print(f"Error PDF: {e}")
@@ -411,12 +438,9 @@ with tab1:
                             with cols[i % 2]:
                                 with st.container(border=True):
                                     cc1, cc2 = st.columns([1, 4])
-                                    
-                                    # Minutatura (Blindada)
-                                    with cc1:
+                                    with cc1: 
                                         try: st.image(item['image'], width=40)
                                         except: st.write("📷")
-                                    
                                     with cc2:
                                         st.markdown(f"<div class='site-title'>{item['name']}</div>", unsafe_allow_html=True)
                                         st.markdown(f"<span class='site-cat'>{item['category']}</span>", unsafe_allow_html=True)
@@ -426,12 +450,8 @@ with tab1:
                                         with st.expander("👁️ Ver Detalles Extraídos"):
                                             dc1, dc2 = st.columns([1, 2])
                                             with dc1:
-                                                # --- IMAGEN GRANDE BLINDADA (Línea 436) ---
-                                                try:
-                                                    st.image(item['image'], use_column_width=True, caption="Perfil")
-                                                except:
-                                                    st.caption("Imagen no disponible")
-                                                # ------------------------------------------
+                                                try: st.image(item['image'], use_column_width=True, caption="Perfil")
+                                                except: st.caption("Imagen no disponible")
                                             with dc2:
                                                 for k, v in item['details'].items():
                                                     st.markdown(f"**{k}:** {v}")
@@ -474,22 +494,16 @@ with tab2:
                 if data['gravatar']['found']:
                     st.success("✅ Gravatar Detectado")
                     g = data['gravatar']
-                    # BLINDAJE
-                    try:
-                        st.image(g['image'], width=80)
-                    except:
-                        st.caption("Imagen no disponible")
+                    try: st.image(g['image'], width=80)
+                    except: st.caption("Imagen no disponible")
                     st.write(f"**Nombre:** {g['name']}")
                 
                 if data.get('duolingo'):
                     st.success("✅ Duolingo Detectado")
                     d = data['duolingo']
-                    # BLINDAJE
                     if d.get('image'):
-                        try:
-                            st.image(d['image'], width=80)
-                        except:
-                            st.caption("Imagen no disponible")
+                        try: st.image(d['image'], width=80)
+                        except: st.caption("Imagen no disponible")
                     st.write(f"**User:** {d['username']}")
 
             st.divider()
