@@ -101,7 +101,7 @@ def extract_telegram(username):
     except:
         return {}, None
 
-# --- EXTRACTOR GITLAB (MANTENIDO JSON) ---
+# --- EXTRACTOR GITLAB (JSON API) ---
 def extract_gitlab(username):
     try:
         r = requests.get(f"https://gitlab.com/api/v4/users?username={username}", headers=get_headers(), timeout=5)
@@ -189,7 +189,7 @@ def check_site(site, username):
     image_url = None
     site_name = site['name'].lower()
     
-    # Enrutamiento (GitHub eliminado para usar el genérico más estable)
+    # Enrutamiento
     if "telegram" in site_name: 
         details, image_url = extract_telegram(username)
     elif "gitlab" in site_name: 
@@ -286,17 +286,14 @@ class PDFReport(FPDF):
         self.cell(0, 5, f'Pagina {self.page_no()}', 0, 0, 'C')
 
 def generate_files(results, target):
-    # Timestamp con Zona Horaria Local
     now = datetime.now().astimezone() 
     timestamp_display = now.strftime("%d/%m/%Y %H:%M:%S (GMT%z)")
     timestamp_filename = now.strftime("%Y%m%d_%H%M%S")
 
-    # 1. CSV
     df = pd.DataFrame(results)
     df['fecha_extraccion'] = timestamp_display
     csv = df.drop(columns=['details', 'image'], errors='ignore').to_csv(index=False).encode('utf-8')
     
-    # 2. TXT
     txt = io.StringIO()
     txt.write(f"REPORTE DE INVESTIGACION - USUARIO: {target}\n")
     txt.write(f"Fecha de Extraccion: {timestamp_display}\n")
@@ -310,7 +307,6 @@ def generate_files(results, target):
                 txt.write(f"  - {k}: {v}\n")
         txt.write("-" * 20 + "\n")
     
-    # 3. PDF
     pdf_bytes = None
     try:
         pdf = PDFReport() 
@@ -416,13 +412,10 @@ with tab1:
                                 with st.container(border=True):
                                     cc1, cc2 = st.columns([1, 4])
                                     
-                                    # --- CORRECCIÓN DE ERROR DE IMAGEN AQUÍ ---
+                                    # Minutatura (Blindada)
                                     with cc1:
-                                        try:
-                                            st.image(item['image'], width=40)
-                                        except:
-                                            st.write("📷") 
-                                    # ------------------------------------------
+                                        try: st.image(item['image'], width=40)
+                                        except: st.write("📷")
                                     
                                     with cc2:
                                         st.markdown(f"<div class='site-title'>{item['name']}</div>", unsafe_allow_html=True)
@@ -433,7 +426,12 @@ with tab1:
                                         with st.expander("👁️ Ver Detalles Extraídos"):
                                             dc1, dc2 = st.columns([1, 2])
                                             with dc1:
-                                                st.image(item['image'], use_column_width=True, caption="Perfil")
+                                                # --- IMAGEN GRANDE BLINDADA (Línea 436) ---
+                                                try:
+                                                    st.image(item['image'], use_column_width=True, caption="Perfil")
+                                                except:
+                                                    st.caption("Imagen no disponible")
+                                                # ------------------------------------------
                                             with dc2:
                                                 for k, v in item['details'].items():
                                                     st.markdown(f"**{k}:** {v}")
@@ -476,7 +474,7 @@ with tab2:
                 if data['gravatar']['found']:
                     st.success("✅ Gravatar Detectado")
                     g = data['gravatar']
-                    # BLINDAJE DE IMAGEN PARA GRAVATAR
+                    # BLINDAJE
                     try:
                         st.image(g['image'], width=80)
                     except:
@@ -486,7 +484,7 @@ with tab2:
                 if data.get('duolingo'):
                     st.success("✅ Duolingo Detectado")
                     d = data['duolingo']
-                    # BLINDAJE DE IMAGEN PARA DUOLINGO
+                    # BLINDAJE
                     if d.get('image'):
                         try:
                             st.image(d['image'], width=80)
