@@ -189,7 +189,7 @@ def check_site(site, username):
     image_url = None
     site_name = site['name'].lower()
     
-    # Enrutamiento
+    # Enrutamiento (GitHub eliminado para usar el genérico más estable)
     if "telegram" in site_name: 
         details, image_url = extract_telegram(username)
     elif "gitlab" in site_name: 
@@ -286,14 +286,17 @@ class PDFReport(FPDF):
         self.cell(0, 5, f'Pagina {self.page_no()}', 0, 0, 'C')
 
 def generate_files(results, target):
+    # Timestamp con Zona Horaria Local
     now = datetime.now().astimezone() 
     timestamp_display = now.strftime("%d/%m/%Y %H:%M:%S (GMT%z)")
     timestamp_filename = now.strftime("%Y%m%d_%H%M%S")
 
+    # 1. CSV
     df = pd.DataFrame(results)
     df['fecha_extraccion'] = timestamp_display
     csv = df.drop(columns=['details', 'image'], errors='ignore').to_csv(index=False).encode('utf-8')
     
+    # 2. TXT
     txt = io.StringIO()
     txt.write(f"REPORTE DE INVESTIGACION - USUARIO: {target}\n")
     txt.write(f"Fecha de Extraccion: {timestamp_display}\n")
@@ -307,6 +310,7 @@ def generate_files(results, target):
                 txt.write(f"  - {k}: {v}\n")
         txt.write("-" * 20 + "\n")
     
+    # 3. PDF
     pdf_bytes = None
     try:
         pdf = PDFReport() 
@@ -411,7 +415,15 @@ with tab1:
                             with cols[i % 2]:
                                 with st.container(border=True):
                                     cc1, cc2 = st.columns([1, 4])
-                                    with cc1: st.image(item['image'], width=40)
+                                    
+                                    # --- CORRECCIÓN DE ERROR DE IMAGEN AQUÍ ---
+                                    with cc1:
+                                        try:
+                                            st.image(item['image'], width=40)
+                                        except:
+                                            st.write("📷") 
+                                    # ------------------------------------------
+                                    
                                     with cc2:
                                         st.markdown(f"<div class='site-title'>{item['name']}</div>", unsafe_allow_html=True)
                                         st.markdown(f"<span class='site-cat'>{item['category']}</span>", unsafe_allow_html=True)
