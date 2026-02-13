@@ -10,8 +10,8 @@ from email_validator import validate_email, EmailNotValidError
 import urllib.parse
 from datetime import datetime
 import time
-import tempfile # <--- NUEVO: Para procesar imágenes en el PDF
-import os       # <--- NUEVO: Para limpiar archivos temporales
+import tempfile # <--- NUEVO: Para gestionar imágenes temporales en el PDF
+import os       # <--- NUEVO: Para borrar los temporales
 
 # Importamos socid-extractor
 try:
@@ -103,6 +103,7 @@ def extract_telegram(username):
     except:
         return {}, None
 
+# --- EXTRACTOR GITLAB (JSON API) ---
 def extract_gitlab(username):
     try:
         r = requests.get(f"https://gitlab.com/api/v4/users?username={username}", headers=get_headers(), timeout=5)
@@ -123,6 +124,7 @@ def extract_gitlab(username):
         pass
     return {}, None
 
+# --- EXTRACTOR GITHUB (API) ---
 def extract_github(username):
     try:
         r = requests.get(f"https://api.github.com/users/{username}", headers=get_headers(), timeout=5)
@@ -173,6 +175,7 @@ def extract_generic_meta(url):
     except:
         return {}, None
 
+# --- LÓGICA DE DETECCIÓN ---
 def check_site(site, username):
     uri = site['uri_check'].format(account=username)
     
@@ -246,7 +249,7 @@ def analyze_email(email):
 
     return results
 
-# --- 6. GENERADORES DE ARCHIVOS (CON IMAGENES EN PDF) ---
+# --- 6. GENERADORES DE ARCHIVOS (CON IMAGENES Y DETALLES) ---
 WMN_DATA_URL = "https://raw.githubusercontent.com/WebBreacher/WhatsMyName/main/wmn-data.json"
 APP_URL = "https://whatsmyname.streamlit.app/"
 
@@ -270,16 +273,16 @@ class PDFReport(FPDF):
         self.cell(0, 5, f'Pagina {self.page_no()}', 0, 0, 'C')
 
 def generate_files(results, target):
-    # Timestamp
     now = datetime.now().astimezone() 
     timestamp_display = now.strftime("%d/%m/%Y %H:%M:%S (GMT%z)")
     timestamp_filename = now.strftime("%Y%m%d_%H%M%S")
 
-    # CSV y TXT (Igual que antes)
+    # 1. CSV
     df = pd.DataFrame(results)
     df['fecha_extraccion'] = timestamp_display
     csv = df.drop(columns=['details', 'image'], errors='ignore').to_csv(index=False).encode('utf-8')
     
+    # 2. TXT
     txt = io.StringIO()
     txt.write(f"REPORTE DE INVESTIGACION - USUARIO: {target}\n")
     txt.write(f"Fecha de Extraccion: {timestamp_display}\n")
@@ -293,7 +296,7 @@ def generate_files(results, target):
                 txt.write(f"  - {k}: {v}\n")
         txt.write("-" * 20 + "\n")
     
-    # --- PDF MEJORADO CON IMAGENES ---
+    # 3. PDF MEJORADO (CON IMAGENES Y DETALLES)
     pdf_bytes = None
     try:
         pdf = PDFReport() 
@@ -306,69 +309,60 @@ def generate_files(results, target):
         pdf.ln(10)
         
         for item in results:
-            # Encabezado del item con fondo gris
+            # Fondo gris para el encabezado del item
             pdf.set_fill_color(240, 240, 240)
             pdf.set_font("Arial", 'B', 11)
             pdf.cell(0, 8, clean_text(f"{item['name']} ({item['category']})"), 1, 1, 'L', 1)
             
-            # Guardamos posición Y actual
+            # Posición inicial del bloque de contenido
             start_y = pdf.get_y()
             
-            # Lógica de Imagen
+            # --- IMAGEN ---
             image_width = 0
             if item.get('image') and "placeholder" not in item['image']:
                 try:
-                    # Descarga temporal de la imagen
-                    response = requests.get(item['image'], headers=get_headers(), timeout=3)
-                    if response.status_code == 200:
-                        # Guardar en archivo temporal
-                        with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tmp_file:
-                            tmp_file.write(response.content)
-                            tmp_path = tmp_file.name
-                        
-                        # Insertar imagen (25x25 mm)
-                        pdf.image(tmp_path, x=pdf.get_x() + 2, y=start_y + 2, w=25)
-                        image_width = 30 # Reservar espacio a la izquierda
-                        
-                        # Borrar temporal
-                        os.unlink(tmp_path)
+                    # Descargar imagen a archivo temporal
+                    img_data = requests.get(item['image'], headers=get_headers(), timeout=3).content
+                    with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tmp_file:
+                        tmp_file.write(img_data)
+                        tmp_path = tmp_file.name
+                    
+                    # Insertar imagen (25x25 aprox)
+                    pdf.image(tmp_path, x=pdf.get_x() + 2, y=start_y + 2, w=25)
+                    image_width = 30 # Espacio reservado para texto
+                    
+                    # Limpiar temporal
+                    os.unlink(tmp_path)
                 except:
-                    image_width = 0 # Si falla la descarga, no reservamos espacio
+                    image_width = 0 # Si falla, no dejamos espacio
             
-            # Ajustar margen izquierdo para el texto
-            pdf.set_left_margin(10 + image_width)
+            # --- DETALLES Y TEXTO ---
+            pdf.set_left_margin(10 + image_width) # Mover margen para el texto
             pdf.set_y(start_y + 2)
             
-            # Imprimir Texto
             pdf.set_font("Arial", size=9)
+            
+            # URL
             pdf.set_text_color(0, 0, 255)
-            pdf.multi_cell(0, 5, clean_text(f"URL: {item['uri']}")) # Link azul
+            pdf.multi_cell(0, 5, clean_text(f"URL: {item['uri']}"))
             pdf.set_text_color(0, 0, 0)
             
+            # Detalles Extraídos
             if item.get('details'):
                 pdf.ln(2)
                 pdf.set_font("Arial", 'B', 9)
                 pdf.cell(0, 5, clean_text("Detalles Extraidos:"), ln=1)
                 pdf.set_font("Arial", size=8)
                 for k, v in item['details'].items():
-                    val = str(v).replace('\n', ' ').strip()[:300] # Limitar largo texto
+                    # Limpiar texto para PDF (quitar emojis o caracteres raros básicos)
+                    val = str(v).replace('\n', ' ').strip()
                     pdf.multi_cell(0, 4, clean_text(f"- {k}: {val}"))
             
-            # Restaurar margen y calcular salto para el siguiente bloque
+            # Restaurar margen y posición para el siguiente item
             pdf.set_left_margin(10)
-            
-            # Asegurar que el cursor baje lo suficiente (por si la imagen es más alta que el texto)
-            current_y = pdf.get_y()
-            min_y = start_y + 30 if image_width > 0 else start_y + 15
-            
-            if current_y < min_y:
-                pdf.set_y(min_y)
-            else:
-                pdf.ln(5)
-                
-            # Línea separadora
-            pdf.line(10, pdf.get_y(), 200, pdf.get_y())
-            pdf.ln(2)
+            pdf.set_y(start_y + 35 if image_width > 0 and pdf.get_y() < start_y + 30 else pdf.get_y() + 5)
+            pdf.line(10, pdf.get_y(), 200, pdf.get_y()) # Línea separadora
+            pdf.ln(5)
 
         pdf_bytes = pdf.output(dest='S').encode('latin-1', 'ignore')
     except Exception as e:
@@ -444,12 +438,9 @@ with tab1:
                             with cols[i % 2]:
                                 with st.container(border=True):
                                     cc1, cc2 = st.columns([1, 4])
-                                    
-                                    # Minutatura Blindada
-                                    with cc1:
+                                    with cc1: 
                                         try: st.image(item['image'], width=40)
                                         except: st.write("📷")
-                                    
                                     with cc2:
                                         st.markdown(f"<div class='site-title'>{item['name']}</div>", unsafe_allow_html=True)
                                         st.markdown(f"<span class='site-cat'>{item['category']}</span>", unsafe_allow_html=True)
