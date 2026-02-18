@@ -10,8 +10,9 @@ from email_validator import validate_email, EmailNotValidError
 import urllib.parse
 from datetime import datetime
 import time
-import tempfile # <--- NUEVO: Para gestionar imágenes temporales en el PDF
-import os       # <--- NUEVO: Para borrar los temporales
+import tempfile 
+import os
+import re # Necesario para las expresiones regulares de TikTok/LinkedIn
 
 # Importamos socid-extractor
 try:
@@ -80,7 +81,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# --- 4. MOTORES DE EXTRACCIÓN ---
+# --- 4. MOTORES DE EXTRACCIÓN (USUARIOS) ---
 def get_headers():
     return {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'}
 
@@ -103,7 +104,6 @@ def extract_telegram(username):
     except:
         return {}, None
 
-# --- EXTRACTOR GITLAB (JSON API) ---
 def extract_gitlab(username):
     try:
         r = requests.get(f"https://gitlab.com/api/v4/users?username={username}", headers=get_headers(), timeout=5)
@@ -124,7 +124,6 @@ def extract_gitlab(username):
         pass
     return {}, None
 
-# --- EXTRACTOR GITHUB (API) ---
 def extract_github(username):
     try:
         r = requests.get(f"https://api.github.com/users/{username}", headers=get_headers(), timeout=5)
@@ -175,10 +174,8 @@ def extract_generic_meta(url):
     except:
         return {}, None
 
-# --- LÓGICA DE DETECCIÓN ---
 def check_site(site, username):
     uri = site['uri_check'].format(account=username)
-    
     try:
         r = requests.get(uri, headers=get_headers(), timeout=6)
         if r.status_code != site['e_code']: return None
@@ -249,7 +246,49 @@ def analyze_email(email):
 
     return results
 
-# --- 6. GENERADORES DE ARCHIVOS (CON IMAGENES Y DETALLES) ---
+# --- 6. MÓDULOS DE FECHA (TIKTOK & LINKEDIN) ---
+
+def extract_tiktok_date(url):
+    """Extrae la fecha de creación de un video de TikTok desde su URL"""
+    try:
+        # Regex para obtener el ID numérico del video
+        match = re.search(r'/video/(\d+)', url)
+        if match:
+            vid_id = int(match.group(1))
+            # Lógica: Convertir a binario, tomar los primeros 31 bits
+            binary = f"{vid_id:b}"
+            first_31_bits = binary[:31]
+            timestamp = int(first_31_bits, 2)
+            
+            # Crear objetos de fecha
+            date_utc = datetime.utcfromtimestamp(timestamp)
+            date_local = datetime.fromtimestamp(timestamp)
+            return date_utc, date_local
+    except:
+        pass
+    return None, None
+
+def extract_linkedin_date(url):
+    """Extrae la fecha de un post o comentario de LinkedIn"""
+    try:
+        # Regex para ID de 19 dígitos
+        match = re.search(r'([0-9]{19})', url)
+        if match:
+            post_id = int(match.group(1))
+            # Lógica: Convertir a binario, tomar los primeros 41 bits
+            binary = f"{post_id:b}"
+            first_41_bits = binary[:41]
+            timestamp_ms = int(first_41_bits, 2) # LinkedIn usa milisegundos
+            
+            # Crear objetos de fecha (dividir por 1000 para segundos)
+            date_utc = datetime.utcfromtimestamp(timestamp_ms / 1000.0)
+            date_local = datetime.fromtimestamp(timestamp_ms / 1000.0)
+            return date_utc, date_local
+    except:
+        pass
+    return None, None
+
+# --- 7. GENERADORES DE ARCHIVOS ---
 WMN_DATA_URL = "https://raw.githubusercontent.com/WebBreacher/WhatsMyName/main/wmn-data.json"
 APP_URL = "https://whatsmyname.streamlit.app/"
 
@@ -277,12 +316,10 @@ def generate_files(results, target):
     timestamp_display = now.strftime("%d/%m/%Y %H:%M:%S (GMT%z)")
     timestamp_filename = now.strftime("%Y%m%d_%H%M%S")
 
-    # 1. CSV
     df = pd.DataFrame(results)
     df['fecha_extraccion'] = timestamp_display
     csv = df.drop(columns=['details', 'image'], errors='ignore').to_csv(index=False).encode('utf-8')
     
-    # 2. TXT
     txt = io.StringIO()
     txt.write(f"REPORTE DE INVESTIGACION - USUARIO: {target}\n")
     txt.write(f"Fecha de Extraccion: {timestamp_display}\n")
@@ -296,7 +333,6 @@ def generate_files(results, target):
                 txt.write(f"  - {k}: {v}\n")
         txt.write("-" * 20 + "\n")
     
-    # 3. PDF MEJORADO (CON IMAGENES Y DETALLES)
     pdf_bytes = None
     try:
         pdf = PDFReport() 
@@ -309,59 +345,45 @@ def generate_files(results, target):
         pdf.ln(10)
         
         for item in results:
-            # Fondo gris para el encabezado del item
             pdf.set_fill_color(240, 240, 240)
             pdf.set_font("Arial", 'B', 11)
             pdf.cell(0, 8, clean_text(f"{item['name']} ({item['category']})"), 1, 1, 'L', 1)
             
-            # Posición inicial del bloque de contenido
             start_y = pdf.get_y()
             
-            # --- IMAGEN ---
             image_width = 0
             if item.get('image') and "placeholder" not in item['image']:
                 try:
-                    # Descargar imagen a archivo temporal
                     img_data = requests.get(item['image'], headers=get_headers(), timeout=3).content
                     with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tmp_file:
                         tmp_file.write(img_data)
                         tmp_path = tmp_file.name
-                    
-                    # Insertar imagen (25x25 aprox)
                     pdf.image(tmp_path, x=pdf.get_x() + 2, y=start_y + 2, w=25)
-                    image_width = 30 # Espacio reservado para texto
-                    
-                    # Limpiar temporal
+                    image_width = 30
                     os.unlink(tmp_path)
                 except:
-                    image_width = 0 # Si falla, no dejamos espacio
+                    image_width = 0
             
-            # --- DETALLES Y TEXTO ---
-            pdf.set_left_margin(10 + image_width) # Mover margen para el texto
+            pdf.set_left_margin(10 + image_width)
             pdf.set_y(start_y + 2)
             
             pdf.set_font("Arial", size=9)
-            
-            # URL
             pdf.set_text_color(0, 0, 255)
             pdf.multi_cell(0, 5, clean_text(f"URL: {item['uri']}"))
             pdf.set_text_color(0, 0, 0)
             
-            # Detalles Extraídos
             if item.get('details'):
                 pdf.ln(2)
                 pdf.set_font("Arial", 'B', 9)
                 pdf.cell(0, 5, clean_text("Detalles Extraídos:"), ln=1)
                 pdf.set_font("Arial", size=8)
                 for k, v in item['details'].items():
-                    # Limpiar texto para PDF (quitar emojis o caracteres raros básicos)
                     val = str(v).replace('\n', ' ').strip()
                     pdf.multi_cell(0, 4, clean_text(f"- {k}: {val}"))
             
-            # Restaurar margen y posición para el siguiente item
             pdf.set_left_margin(10)
             pdf.set_y(start_y + 35 if image_width > 0 and pdf.get_y() < start_y + 30 else pdf.get_y() + 5)
-            pdf.line(10, pdf.get_y(), 200, pdf.get_y()) # Línea separadora
+            pdf.line(10, pdf.get_y(), 200, pdf.get_y())
             pdf.ln(5)
 
         pdf_bytes = pdf.output(dest='S').encode('latin-1', 'ignore')
@@ -371,7 +393,7 @@ def generate_files(results, target):
         
     return csv, txt.getvalue(), pdf_bytes, timestamp_filename
 
-# --- 7. INTERFAZ ---
+# --- 8. INTERFAZ ---
 @st.cache_data
 def load_sites():
     try: return requests.get(WMN_DATA_URL).json()['sites']
@@ -392,9 +414,10 @@ with st.sidebar:
 
 st.markdown("<h1 class='main-title'>ManuelBot59 Suite OSINT</h1>", unsafe_allow_html=True)
 
-tab1, tab2 = st.tabs(["👤 Búsqueda de Usuario", "📧 Análisis de Correo"])
+# SISTEMA DE PESTAÑAS (4 TABS)
+tab1, tab2, tab3, tab4 = st.tabs(["👤 Usuario", "📧 Correo", "🎵 TikTok Date", "💼 LinkedIn Date"])
 
-# TAB 1: USUARIOS
+# --- TAB 1: USUARIOS ---
 with tab1:
     st.markdown("### 🔎 Rastreador de Huella Digital")
     progress_placeholder = st.empty()
@@ -474,7 +497,7 @@ with tab1:
             else: 
                 st.warning("PDF no disponible")
 
-# TAB 2: CORREOS
+# --- TAB 2: CORREOS ---
 with tab2:
     st.markdown("### 📧 Inteligencia de Correo")
     email_in = st.text_input("Correo electrónico", placeholder="ejemplo@gmail.com")
@@ -522,6 +545,56 @@ with tab2:
             lc = st.columns(4)
             for i, (name, url) in enumerate(links):
                 with lc[i % 4]: st.link_button(f"🔎 {name}", url, use_container_width=True)
+
+# --- TAB 3: TIKTOK DATE ---
+with tab3:
+    st.markdown("### 🎵 TikTok Timestamp Extractor")
+    st.caption("Obtén la fecha exacta de publicación de un video de TikTok, incluso si fue eliminado.")
+    
+    tiktok_url = st.text_input("URL del video de TikTok:", placeholder="https://www.tiktok.com/@usuario/video/...")
+    
+    if st.button("Obtener Fecha TikTok", type="primary"):
+        if tiktok_url:
+            date_utc, date_local = extract_tiktok_date(tiktok_url)
+            if date_utc:
+                st.success("✅ Fecha Extraída Exitosamente")
+                c1, c2 = st.columns(2)
+                with c1:
+                    st.metric("Fecha (UTC)", date_utc.strftime("%Y-%m-%d %H:%M:%S"))
+                with c2:
+                    st.metric("Fecha (Local)", date_local.strftime("%Y-%m-%d %H:%M:%S"))
+            else:
+                st.error("❌ No se pudo extraer la fecha. Verifica la URL.")
+        else:
+            st.warning("⚠️ Ingresa una URL válida.")
+    
+    st.markdown("---")
+    st.caption("Nota: Esta herramienta analiza el ID del video (Snowflake ID) para calcular la fecha de creación.")
+
+# --- TAB 4: LINKEDIN DATE ---
+with tab4:
+    st.markdown("### 💼 LinkedIn Timestamp Extractor")
+    st.caption("Descubre cuándo se creó realmente un post o comentario de LinkedIn.")
+    
+    linkedin_url = st.text_input("URL del post de LinkedIn:", placeholder="https://www.linkedin.com/posts/...")
+    
+    if st.button("Obtener Fecha LinkedIn", type="primary"):
+        if linkedin_url:
+            date_utc, date_local = extract_linkedin_date(linkedin_url)
+            if date_utc:
+                st.success("✅ Fecha Extraída Exitosamente")
+                c1, c2 = st.columns(2)
+                with c1:
+                    st.metric("Fecha (UTC)", date_utc.strftime("%Y-%m-%d %H:%M:%S"))
+                with c2:
+                    st.metric("Fecha (Local)", date_local.strftime("%Y-%m-%d %H:%M:%S"))
+            else:
+                st.error("❌ No se pudo extraer la fecha. Asegúrate de copiar el enlace al post específico.")
+        else:
+            st.warning("⚠️ Ingresa una URL válida.")
+            
+    st.markdown("---")
+    st.caption("Nota: Funciona extrayendo el ID del post de 19 dígitos y decodificando sus bits de tiempo.")
 
 # Footer Actualizado
 st.markdown("""
