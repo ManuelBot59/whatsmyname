@@ -403,15 +403,16 @@ with st.sidebar:
     """)
     st.markdown("---")
     
-    # --- CONFIGURACIÓN DE ZONA HORARIA ---
+    # --- CONFIGURACIÓN DE ZONA HORARIA COMPLETA ---
     st.markdown("### 🕒 Configuración Horaria")
-    # Lista de zonas horarias comunes
-    common_timezones = [
-        "America/Lima", "America/Bogota", "America/Mexico_City", 
-        "America/New_York", "Europe/Madrid", "UTC", "America/Santiago", "America/Argentina/Buenos_Aires"
-    ]
-    # Por defecto: America/Lima (Perú)
-    selected_timezone = st.selectbox("Tu Zona Horaria:", common_timezones, index=0)
+    # Obtener todas las zonas horarias disponibles
+    all_timezones = sorted(pytz.all_timezones)
+    # Intentar poner America/Lima como defecto
+    try:
+        default_ix = all_timezones.index("America/Lima")
+    except ValueError:
+        default_ix = 0
+    selected_timezone = st.selectbox("Tu Zona Horaria:", all_timezones, index=default_ix)
     st.markdown("---")
     
     st.markdown("### 📞 Soporte")
@@ -603,12 +604,13 @@ with tab4:
         else:
             st.warning("⚠️ Ingresa una URL válida.")
 
-# Footer Actualizado
+# Footer Actualizado (CON ENLACE A GITHUB)
 st.markdown("""
 <div class="footer-credits">
     OSINT Suite developed by <a href="https://x.com/ManuelBot59" target="_blank"><strong>Manuel Travezaño</strong></a><br>
     This tool is powered by <a href="https://github.com/WebBreacher/WhatsMyName" target="_blank">WhatsMyName</a>, 
     <a href="https://github.com/soxoj/socid-extractor" target="_blank">socid-extractor</a> & 
-    <a href="https://www.dnspython.org/" target="_blank">DNSPython</a>
+    <a href="https://www.dnspython.org/" target="_blank">DNSPython</a><br><br>
+    📂 <strong>Código Fuente:</strong> <a href="https://github.com/ManuelBot59/whatsmyname" target="_blank">Repositorio GitHub</a> (Recurso Libre y Gratuito)
 </div>
 """, unsafe_allow_html=True)
