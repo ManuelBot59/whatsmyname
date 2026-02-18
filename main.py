@@ -8,11 +8,12 @@ from bs4 import BeautifulSoup
 import dns.resolver
 from email_validator import validate_email, EmailNotValidError
 import urllib.parse
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import time
 import tempfile 
 import os
 import re
+import pytz # Necesario para zonas horarias precisas
 
 # Importamos socid-extractor
 try:
@@ -249,7 +250,7 @@ def analyze_email(email):
 # --- 6. MÓDULOS DE FECHA (MEJORADOS CON ZONA HORARIA) ---
 
 def extract_tiktok_date(url):
-    """Extrae fecha TikTok y convierte a local del sistema"""
+    """Devuelve la fecha UTC y el timestamp puro"""
     try:
         match = re.search(r'/video/(\d+)', url)
         if match:
@@ -257,19 +258,15 @@ def extract_tiktok_date(url):
             binary = f"{vid_id:b}"
             first_31_bits = binary[:31]
             timestamp = int(first_31_bits, 2)
-            
-            # UTC (Consciente de zona)
+            # Retorna fecha UTC pura
             date_utc = datetime.fromtimestamp(timestamp, timezone.utc)
-            # Local (Convierte UTC a la zona horaria del sistema)
-            date_local = date_utc.astimezone()
-            
-            return date_utc, date_local
+            return date_utc
     except:
         pass
-    return None, None
+    return None
 
 def extract_linkedin_date(url):
-    """Extrae fecha LinkedIn y convierte a local del sistema"""
+    """Devuelve la fecha UTC y el timestamp puro"""
     try:
         match = re.search(r'([0-9]{19})', url)
         if match:
@@ -277,16 +274,12 @@ def extract_linkedin_date(url):
             binary = f"{post_id:b}"
             first_41_bits = binary[:41]
             timestamp_ms = int(first_41_bits, 2)
-            
-            # UTC (Consciente de zona)
+            # Retorna fecha UTC pura
             date_utc = datetime.fromtimestamp(timestamp_ms / 1000.0, timezone.utc)
-            # Local
-            date_local = date_utc.astimezone()
-            
-            return date_utc, date_local
+            return date_utc
     except:
         pass
-    return None, None
+    return None
 
 # --- 7. GENERADORES DE ARCHIVOS ---
 WMN_DATA_URL = "https://raw.githubusercontent.com/WebBreacher/WhatsMyName/main/wmn-data.json"
@@ -312,8 +305,9 @@ class PDFReport(FPDF):
         self.cell(0, 5, f'Pagina {self.page_no()}', 0, 0, 'C')
 
 def generate_files(results, target):
-    now = datetime.now().astimezone() 
-    timestamp_display = now.strftime("%d/%m/%Y %H:%M:%S (GMT%z)")
+    # Usamos la zona horaria del sistema o UTC por defecto
+    now = datetime.now(timezone.utc)
+    timestamp_display = now.strftime("%d/%m/%Y %H:%M:%S (UTC)")
     timestamp_filename = now.strftime("%Y%m%d_%H%M%S")
 
     df = pd.DataFrame(results)
@@ -350,8 +344,9 @@ def generate_files(results, target):
             pdf.cell(0, 8, clean_text(f"{item['name']} ({item['category']})"), 1, 1, 'L', 1)
             
             start_y = pdf.get_y()
-            
             image_width = 0
+            
+            # Gestión de imagen
             if item.get('image') and "placeholder" not in item['image']:
                 try:
                     img_data = requests.get(item['image'], headers=get_headers(), timeout=3).content
@@ -366,7 +361,6 @@ def generate_files(results, target):
             
             pdf.set_left_margin(10 + image_width)
             pdf.set_y(start_y + 2)
-            
             pdf.set_font("Arial", size=9)
             pdf.set_text_color(0, 0, 255)
             pdf.multi_cell(0, 5, clean_text(f"URL: {item['uri']}"))
@@ -408,6 +402,18 @@ with st.sidebar:
     - [🕵️ OSINT](https://manuelbot59.com/osint/)
     """)
     st.markdown("---")
+    
+    # --- CONFIGURACIÓN DE ZONA HORARIA ---
+    st.markdown("### 🕒 Configuración Horaria")
+    # Lista de zonas horarias comunes
+    common_timezones = [
+        "America/Lima", "America/Bogota", "America/Mexico_City", 
+        "America/New_York", "Europe/Madrid", "UTC", "America/Santiago", "America/Argentina/Buenos_Aires"
+    ]
+    # Por defecto: America/Lima (Perú)
+    selected_timezone = st.selectbox("Tu Zona Horaria:", common_timezones, index=0)
+    st.markdown("---")
+    
     st.markdown("### 📞 Soporte")
     st.markdown("📧 **Email:** ManuelBot@proton.me")
     st.markdown("✈️ **Telegram Soporte:** [ManuelBot59](https://t.me/ManuelBot59_Bot)")
@@ -421,7 +427,6 @@ tab1, tab2, tab3, tab4 = st.tabs(["👤 Usuario", "📧 Correo", "🎵 Extractor
 with tab1:
     st.markdown("### 🔎 Rastreador de Huella Digital")
     progress_placeholder = st.empty()
-    
     sites = load_sites()
     categories = sorted(list(set([s['cat'] for s in sites])))
     
@@ -546,56 +551,53 @@ with tab2:
             for i, (name, url) in enumerate(links):
                 with lc[i % 4]: st.link_button(f"🔎 {name}", url, use_container_width=True)
 
-# --- TAB 3: TIKTOK DATE (CORREGIDO) ---
+# --- TAB 3: TIKTOK DATE (CON ZONA HORARIA) ---
 with tab3:
     st.markdown("### 🎵 Extractor de Fecha TikTok")
-    st.caption("Obtén la fecha exacta de publicación de un video de TikTok.")
+    st.caption(f"Zona horaria seleccionada: **{selected_timezone}**")
     
     tiktok_url = st.text_input("URL del video:", placeholder="https://www.tiktok.com/@usuario/video/...")
     
     if st.button("Obtener Fecha TikTok", type="primary"):
         if tiktok_url:
-            date_utc, date_local = extract_tiktok_date(tiktok_url)
+            date_utc = extract_tiktok_date(tiktok_url)
             if date_utc:
-                st.success("✅ Fecha Extraída Exitosamente")
+                # Conversión a la zona horaria seleccionada
+                target_tz = pytz.timezone(selected_timezone)
+                date_local = date_utc.astimezone(target_tz)
                 
-                # MOSTRAR ZONA HORARIA DETECTADA
-                local_tz_name = datetime.now().astimezone().tzname()
-                st.info(f"🕒 Zona Horaria del Sistema Detectada: **{local_tz_name}**")
-                
+                st.success("✅ Fecha Calculada Exitosamente")
                 c1, c2 = st.columns(2)
                 with c1:
                     st.metric("Fecha (UTC)", date_utc.strftime("%Y-%m-%d %H:%M:%S"))
                 with c2:
-                    # Mostrar con offset para claridad
-                    st.metric("Fecha (Local Detectada)", date_local.strftime("%Y-%m-%d %H:%M:%S %z"))
+                    st.metric(f"Fecha ({selected_timezone})", date_local.strftime("%Y-%m-%d %H:%M:%S %z"))
             else:
                 st.error("❌ No se pudo extraer. Verifica la URL.")
         else:
             st.warning("⚠️ Ingresa una URL válida.")
 
-# --- TAB 4: LINKEDIN DATE (CORREGIDO) ---
+# --- TAB 4: LINKEDIN DATE (CON ZONA HORARIA) ---
 with tab4:
     st.markdown("### 💼 Extractor de Fecha de LinkedIn")
-    st.caption("Descubre cuándo se creó realmente un post de LinkedIn.")
+    st.caption(f"Zona horaria seleccionada: **{selected_timezone}**")
     
     linkedin_url = st.text_input("URL del post:", placeholder="https://www.linkedin.com/posts/...")
     
     if st.button("Obtener Fecha LinkedIn", type="primary"):
         if linkedin_url:
-            date_utc, date_local = extract_linkedin_date(linkedin_url)
+            date_utc = extract_linkedin_date(linkedin_url)
             if date_utc:
-                st.success("✅ Fecha Extraída Exitosamente")
+                # Conversión a la zona horaria seleccionada
+                target_tz = pytz.timezone(selected_timezone)
+                date_local = date_utc.astimezone(target_tz)
                 
-                # MOSTRAR ZONA HORARIA DETECTADA
-                local_tz_name = datetime.now().astimezone().tzname()
-                st.info(f"🕒 Zona Horaria del Sistema Detectada: **{local_tz_name}**")
-                
+                st.success("✅ Fecha Calculada Exitosamente")
                 c1, c2 = st.columns(2)
                 with c1:
                     st.metric("Fecha (UTC)", date_utc.strftime("%Y-%m-%d %H:%M:%S"))
                 with c2:
-                    st.metric("Fecha (Local Detectada)", date_local.strftime("%Y-%m-%d %H:%M:%S %z"))
+                    st.metric(f"Fecha ({selected_timezone})", date_local.strftime("%Y-%m-%d %H:%M:%S %z"))
             else:
                 st.error("❌ No se pudo extraer. Verifica la URL.")
         else:
