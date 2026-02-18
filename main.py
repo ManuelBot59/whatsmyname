@@ -8,11 +8,11 @@ from bs4 import BeautifulSoup
 import dns.resolver
 from email_validator import validate_email, EmailNotValidError
 import urllib.parse
-from datetime import datetime
+from datetime import datetime, timezone
 import time
 import tempfile 
 import os
-import re # Necesario para las expresiones regulares de TikTok/LinkedIn
+import re
 
 # Importamos socid-extractor
 try:
@@ -246,43 +246,43 @@ def analyze_email(email):
 
     return results
 
-# --- 6. MÓDULOS DE FECHA (TIKTOK & LINKEDIN) ---
+# --- 6. MÓDULOS DE FECHA (MEJORADOS CON ZONA HORARIA) ---
 
 def extract_tiktok_date(url):
-    """Extrae la fecha de creación de un video de TikTok desde su URL"""
+    """Extrae fecha TikTok y convierte a local del sistema"""
     try:
-        # Regex para obtener el ID numérico del video
         match = re.search(r'/video/(\d+)', url)
         if match:
             vid_id = int(match.group(1))
-            # Lógica: Convertir a binario, tomar los primeros 31 bits
             binary = f"{vid_id:b}"
             first_31_bits = binary[:31]
             timestamp = int(first_31_bits, 2)
             
-            # Crear objetos de fecha
-            date_utc = datetime.utcfromtimestamp(timestamp)
-            date_local = datetime.fromtimestamp(timestamp)
+            # UTC (Consciente de zona)
+            date_utc = datetime.fromtimestamp(timestamp, timezone.utc)
+            # Local (Convierte UTC a la zona horaria del sistema)
+            date_local = date_utc.astimezone()
+            
             return date_utc, date_local
     except:
         pass
     return None, None
 
 def extract_linkedin_date(url):
-    """Extrae la fecha de un post o comentario de LinkedIn"""
+    """Extrae fecha LinkedIn y convierte a local del sistema"""
     try:
-        # Regex para ID de 19 dígitos
         match = re.search(r'([0-9]{19})', url)
         if match:
             post_id = int(match.group(1))
-            # Lógica: Convertir a binario, tomar los primeros 41 bits
             binary = f"{post_id:b}"
             first_41_bits = binary[:41]
-            timestamp_ms = int(first_41_bits, 2) # LinkedIn usa milisegundos
+            timestamp_ms = int(first_41_bits, 2)
             
-            # Crear objetos de fecha (dividir por 1000 para segundos)
-            date_utc = datetime.utcfromtimestamp(timestamp_ms / 1000.0)
-            date_local = datetime.fromtimestamp(timestamp_ms / 1000.0)
+            # UTC (Consciente de zona)
+            date_utc = datetime.fromtimestamp(timestamp_ms / 1000.0, timezone.utc)
+            # Local
+            date_local = date_utc.astimezone()
+            
             return date_utc, date_local
     except:
         pass
@@ -414,8 +414,8 @@ with st.sidebar:
 
 st.markdown("<h1 class='main-title'>ManuelBot59 Suite OSINT</h1>", unsafe_allow_html=True)
 
-# SISTEMA DE PESTAÑAS (4 TABS)
-tab1, tab2, tab3, tab4 = st.tabs(["👤 Usuario", "📧 Correo", "🎵 TikTok Date", "💼 LinkedIn Date"])
+# SISTEMA DE PESTAÑAS (NOMBRES CORREGIDOS)
+tab1, tab2, tab3, tab4 = st.tabs(["👤 Usuario", "📧 Correo", "🎵 Extractor de Fecha TikTok", "💼 Extractor de Fecha de LinkedIn"])
 
 # --- TAB 1: USUARIOS ---
 with tab1:
@@ -546,55 +546,60 @@ with tab2:
             for i, (name, url) in enumerate(links):
                 with lc[i % 4]: st.link_button(f"🔎 {name}", url, use_container_width=True)
 
-# --- TAB 3: TIKTOK DATE ---
+# --- TAB 3: TIKTOK DATE (CORREGIDO) ---
 with tab3:
-    st.markdown("### 🎵 TikTok Timestamp Extractor")
-    st.caption("Obtén la fecha exacta de publicación de un video de TikTok, incluso si fue eliminado.")
+    st.markdown("### 🎵 Extractor de Fecha TikTok")
+    st.caption("Obtén la fecha exacta de publicación de un video de TikTok.")
     
-    tiktok_url = st.text_input("URL del video de TikTok:", placeholder="https://www.tiktok.com/@usuario/video/...")
+    tiktok_url = st.text_input("URL del video:", placeholder="https://www.tiktok.com/@usuario/video/...")
     
     if st.button("Obtener Fecha TikTok", type="primary"):
         if tiktok_url:
             date_utc, date_local = extract_tiktok_date(tiktok_url)
             if date_utc:
                 st.success("✅ Fecha Extraída Exitosamente")
+                
+                # MOSTRAR ZONA HORARIA DETECTADA
+                local_tz_name = datetime.now().astimezone().tzname()
+                st.info(f"🕒 Zona Horaria del Sistema Detectada: **{local_tz_name}**")
+                
                 c1, c2 = st.columns(2)
                 with c1:
                     st.metric("Fecha (UTC)", date_utc.strftime("%Y-%m-%d %H:%M:%S"))
                 with c2:
-                    st.metric("Fecha (Local)", date_local.strftime("%Y-%m-%d %H:%M:%S"))
+                    # Mostrar con offset para claridad
+                    st.metric("Fecha (Local Detectada)", date_local.strftime("%Y-%m-%d %H:%M:%S %z"))
             else:
-                st.error("❌ No se pudo extraer la fecha. Verifica la URL.")
+                st.error("❌ No se pudo extraer. Verifica la URL.")
         else:
             st.warning("⚠️ Ingresa una URL válida.")
-    
-    st.markdown("---")
-    st.caption("Nota: Esta herramienta analiza el ID del video (Snowflake ID) para calcular la fecha de creación.")
 
-# --- TAB 4: LINKEDIN DATE ---
+# --- TAB 4: LINKEDIN DATE (CORREGIDO) ---
 with tab4:
-    st.markdown("### 💼 LinkedIn Timestamp Extractor")
-    st.caption("Descubre cuándo se creó realmente un post o comentario de LinkedIn.")
+    st.markdown("### 💼 Extractor de Fecha de LinkedIn")
+    st.caption("Descubre cuándo se creó realmente un post de LinkedIn.")
     
-    linkedin_url = st.text_input("URL del post de LinkedIn:", placeholder="https://www.linkedin.com/posts/...")
+    linkedin_url = st.text_input("URL del post:", placeholder="https://www.linkedin.com/posts/...")
     
     if st.button("Obtener Fecha LinkedIn", type="primary"):
         if linkedin_url:
             date_utc, date_local = extract_linkedin_date(linkedin_url)
             if date_utc:
                 st.success("✅ Fecha Extraída Exitosamente")
+                
+                # MOSTRAR ZONA HORARIA DETECTADA
+                local_tz_name = datetime.now().astimezone().tzname()
+                st.info(f"🕒 Zona Horaria del Sistema Detectada: **{local_tz_name}**")
+                
                 c1, c2 = st.columns(2)
                 with c1:
                     st.metric("Fecha (UTC)", date_utc.strftime("%Y-%m-%d %H:%M:%S"))
                 with c2:
-                    st.metric("Fecha (Local)", date_local.strftime("%Y-%m-%d %H:%M:%S"))
+                    st.metric("Fecha (Local Detectada)", date_local.strftime("%Y-%m-%d %H:%M:%S %z"))
             else:
-                st.error("❌ No se pudo extraer la fecha. Asegúrate de copiar el enlace al post específico.")
+                st.error("❌ No se pudo extraer. Verifica la URL.")
         else:
             st.warning("⚠️ Ingresa una URL válida.")
-            
-    st.markdown("---")
-    st.caption("Nota: Funciona extrayendo el ID del post de 19 dígitos y decodificando sus bits de tiempo.")
 
 # Footer Actualizado
 st.markdown("""
