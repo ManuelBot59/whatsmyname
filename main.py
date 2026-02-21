@@ -394,7 +394,7 @@ def load_sites():
     except: return []
 
 with st.sidebar:
-    try: st.image("https://manuelbot59.com/images/FirmaManuelBot59.png", use_column_width=True)
+    try: st.image("https://manuelbot59.com/images/logo_horizontal_2.png", use_column_width=True)
     except: st.header("ManuelBot59")
     st.markdown("### 📌 Navegación")
     st.markdown("""
@@ -613,4 +613,5 @@ st.markdown("""
     <a href="https://www.dnspython.org/" target="_blank">DNSPython</a><br><br>
     📂 <strong>Código Fuente:</strong> <a href="https://github.com/ManuelBot59/whatsmyname" target="_blank">Repositorio GitHub</a> (Recurso Libre y Gratuito)
 </div>
+
 """, unsafe_allow_html=True)
