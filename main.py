@@ -394,7 +394,7 @@ def load_sites():
     except: return []
 
 with st.sidebar:
-    try: st.image("https://manuelbot59.com/images/logo_horizontal_3.png", use_column_width=True)
+    try: st.image("https://manuelbot59.com/images/logo/logo_horizontal_3_en.png", use_column_width=True)
     except: st.header("ManuelBot59")
     st.markdown("### 📌 Navegación")
     st.markdown("""
