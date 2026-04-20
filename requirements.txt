@@ -6,3 +6,4 @@ socid-extractor
 beautifulsoup4
 dnspython
 email-validator
+pytz
